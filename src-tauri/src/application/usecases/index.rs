@@ -1,0 +1,136 @@
+use std::sync::Arc;
+
+use serde::Serialize;
+
+use crate::application::chunking::chunk_text;
+use crate::domain::entities::chunk::Chunk;
+use crate::domain::entities::document::Document;
+use crate::domain::error::DomainResult;
+use crate::domain::repositories::{DocumentRepository, WorkspaceRepository};
+use crate::domain::services::{EmbeddingProvider, SecretScanner, SourceScanner};
+
+const MAX_CHUNK_LINES: usize = 60;
+const CHUNK_OVERLAP_LINES: usize = 8;
+/// Embedding batch size kept small so local embedders stay responsive.
+const EMBED_BATCH: usize = 16;
+
+#[derive(Debug, Default, Serialize)]
+pub struct IndexReport {
+    pub files_indexed: usize,
+    pub files_unchanged: usize,
+    pub chunks_created: usize,
+    pub files_with_secrets_redacted: usize,
+    pub embeddings_created: usize,
+    pub embedding_available: bool,
+}
+
+pub struct IndexWorkspaceUseCase {
+    workspaces: Arc<dyn WorkspaceRepository>,
+    documents: Arc<dyn DocumentRepository>,
+    scanner: Arc<dyn SourceScanner>,
+    secret_scanner: Arc<dyn SecretScanner>,
+    embedder: Arc<dyn EmbeddingProvider>,
+}
+
+impl IndexWorkspaceUseCase {
+    pub fn new(
+        workspaces: Arc<dyn WorkspaceRepository>,
+        documents: Arc<dyn DocumentRepository>,
+        scanner: Arc<dyn SourceScanner>,
+        secret_scanner: Arc<dyn SecretScanner>,
+        embedder: Arc<dyn EmbeddingProvider>,
+    ) -> Self {
+        Self {
+            workspaces,
+            documents,
+            scanner,
+            secret_scanner,
+            embedder,
+        }
+    }
+
+    pub async fn execute(&self, workspace_id: &str) -> DomainResult<IndexReport> {
+        let workspace = self.workspaces.find_by_id(workspace_id)?;
+        let files = self.scanner.scan(&workspace.root_path)?;
+        let embedding_available = self.embedder.is_available().await;
+
+        let mut report = IndexReport {
+            embedding_available,
+            ..Default::default()
+        };
+
+        for file in files {
+            // Incremental: skip files whose content hash is unchanged. When a
+            // file did change, keep its document id stable across re-indexing.
+            let existing = self
+                .documents
+                .find_by_path(workspace_id, &file.rel_path)?;
+            if let Some(ref doc) = existing {
+                if doc.content_hash == file.content_hash {
+                    report.files_unchanged += 1;
+                    continue;
+                }
+            }
+
+            // Secrets must never enter the index: redact before chunking.
+            let findings = self.secret_scanner.scan(&file.content);
+            let content = if findings.is_empty() {
+                file.content.clone()
+            } else {
+                report.files_with_secrets_redacted += 1;
+                self.secret_scanner.redact(&file.content)
+            };
+
+            let document = Document {
+                id: existing
+                    .map(|d| d.id)
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                workspace_id: workspace_id.to_string(),
+                rel_path: file.rel_path.clone(),
+                language: file.language.clone(),
+                content_hash: file.content_hash.clone(),
+                indexed_at: chrono::Utc::now().to_rfc3339(),
+            };
+            self.documents.upsert_document(&document)?;
+
+            let chunks: Vec<Chunk> = chunk_text(&content, MAX_CHUNK_LINES, CHUNK_OVERLAP_LINES)
+                .into_iter()
+                .enumerate()
+                .map(|(seq, c)| Chunk {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    document_id: document.id.clone(),
+                    workspace_id: workspace_id.to_string(),
+                    seq: seq as i64,
+                    content: c.content,
+                    start_line: c.start_line as i64,
+                    end_line: c.end_line as i64,
+                })
+                .collect();
+            self.documents.replace_chunks(&document.id, &chunks)?;
+            report.chunks_created += chunks.len();
+            report.files_indexed += 1;
+
+            if embedding_available {
+                for batch in chunks.chunks(EMBED_BATCH) {
+                    let texts: Vec<String> = batch
+                        .iter()
+                        .map(|c| format!("{}\n{}", file.rel_path, c.content))
+                        .collect();
+                    match self.embedder.embed(&texts).await {
+                        Ok(vectors) => {
+                            for (chunk, vector) in batch.iter().zip(vectors.iter()) {
+                                self.documents.store_embedding(&chunk.id, vector)?;
+                                report.embeddings_created += 1;
+                            }
+                        }
+                        // Embeddings are an enhancement; keyword search still
+                        // works, so indexing must not fail because of them.
+                        Err(_) => break,
+                    }
+                }
+            }
+        }
+
+        Ok(report)
+    }
+}
