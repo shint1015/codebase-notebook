@@ -38,18 +38,31 @@ export interface SearchHit {
   score: number;
 }
 
-export type ProviderKind = "ollama" | "openai" | "anthropic" | "openai_compatible";
+export type ProviderKind =
+  | "ollama"
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "mistral"
+  | "x_ai"
+  | "openai_compatible";
 
 export const PROVIDER_LABELS: Record<ProviderKind, string> = {
   ollama: "Ollama (Local)",
   openai: "OpenAI",
   anthropic: "Anthropic",
+  gemini: "Google Gemini",
+  mistral: "Mistral",
+  x_ai: "xAI (Grok)",
   openai_compatible: "OpenAI-compatible",
 };
 
 export const EXTERNAL_PROVIDERS: ProviderKind[] = [
   "openai",
   "anthropic",
+  "gemini",
+  "mistral",
+  "x_ai",
   "openai_compatible",
 ];
 

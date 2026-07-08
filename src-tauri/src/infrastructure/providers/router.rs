@@ -6,6 +6,7 @@ use crate::domain::repositories::ProviderConfigRepository;
 use crate::domain::services::{LlmProvider, ProviderRouter, SecretStore};
 
 use super::anthropic::AnthropicProvider;
+use super::gemini::GeminiProvider;
 use super::ollama::OllamaProvider;
 use super::openai_compat::OpenAiCompatProvider;
 
@@ -32,6 +33,12 @@ impl ConfiguredProviderRouter {
             .find(kind)?
             .unwrap_or_else(|| ProviderConfig::default_for(kind)))
     }
+
+    fn required_key(&self, kind: ProviderKind) -> DomainResult<String> {
+        self.secrets.get_api_key(kind)?.ok_or_else(|| {
+            DomainError::ProviderNotConfigured(format!("{} API key not set", kind.as_str()))
+        })
+    }
 }
 
 impl ProviderRouter for ConfiguredProviderRouter {
@@ -39,10 +46,10 @@ impl ProviderRouter for ConfiguredProviderRouter {
         let config = self.config_for(kind)?;
         match kind {
             ProviderKind::Ollama => Ok(Arc::new(OllamaProvider::new(&config.base_url))),
-            ProviderKind::OpenAi => {
-                let key = self.secrets.get_api_key(kind)?.ok_or_else(|| {
-                    DomainError::ProviderNotConfigured("OpenAI API key not set".into())
-                })?;
+            // Mistral and xAI expose fully OpenAI-compatible chat APIs, so
+            // they share the adapter and differ only in base URL and key.
+            ProviderKind::OpenAi | ProviderKind::Mistral | ProviderKind::XAi => {
+                let key = self.required_key(kind)?;
                 Ok(Arc::new(OpenAiCompatProvider::new(
                     kind,
                     &config.base_url,
@@ -58,10 +65,12 @@ impl ProviderRouter for ConfiguredProviderRouter {
                 )))
             }
             ProviderKind::Anthropic => {
-                let key = self.secrets.get_api_key(kind)?.ok_or_else(|| {
-                    DomainError::ProviderNotConfigured("Anthropic API key not set".into())
-                })?;
+                let key = self.required_key(kind)?;
                 Ok(Arc::new(AnthropicProvider::new(&config.base_url, key)))
+            }
+            ProviderKind::Gemini => {
+                let key = self.required_key(kind)?;
+                Ok(Arc::new(GeminiProvider::new(&config.base_url, key)))
             }
         }
     }

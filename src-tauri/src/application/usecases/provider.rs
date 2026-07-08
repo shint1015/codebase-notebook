@@ -11,10 +11,13 @@ pub struct ProviderUseCases {
     router: Arc<dyn ProviderRouter>,
 }
 
-pub const ALL_PROVIDER_KINDS: [ProviderKind; 4] = [
+pub const ALL_PROVIDER_KINDS: [ProviderKind; 7] = [
     ProviderKind::Ollama,
     ProviderKind::OpenAi,
     ProviderKind::Anthropic,
+    ProviderKind::Gemini,
+    ProviderKind::Mistral,
+    ProviderKind::XAi,
     ProviderKind::OpenAiCompatible,
 ];
 

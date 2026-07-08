@@ -8,6 +8,9 @@ pub enum ProviderKind {
     Ollama,
     OpenAi,
     Anthropic,
+    Gemini,
+    Mistral,
+    XAi,
     /// Any OpenAI-compatible endpoint (LM Studio, vLLM, in-house gateways...).
     OpenAiCompatible,
 }
@@ -18,6 +21,9 @@ impl ProviderKind {
             ProviderKind::Ollama => "ollama",
             ProviderKind::OpenAi => "openai",
             ProviderKind::Anthropic => "anthropic",
+            ProviderKind::Gemini => "gemini",
+            ProviderKind::Mistral => "mistral",
+            ProviderKind::XAi => "x_ai",
             ProviderKind::OpenAiCompatible => "openai_compatible",
         }
     }
@@ -27,6 +33,9 @@ impl ProviderKind {
             "ollama" => Some(ProviderKind::Ollama),
             "openai" => Some(ProviderKind::OpenAi),
             "anthropic" => Some(ProviderKind::Anthropic),
+            "gemini" => Some(ProviderKind::Gemini),
+            "mistral" => Some(ProviderKind::Mistral),
+            "x_ai" => Some(ProviderKind::XAi),
             "openai_compatible" => Some(ProviderKind::OpenAiCompatible),
             _ => None,
         }
@@ -34,14 +43,9 @@ impl ProviderKind {
 
     /// Local providers never send content off the machine.
     pub fn is_external(&self) -> bool {
-        match self {
-            ProviderKind::Ollama => false,
-            // OpenAI-compatible endpoints may be local (LM Studio) but we treat
-            // them conservatively as external unless proven otherwise.
-            ProviderKind::OpenAi | ProviderKind::Anthropic | ProviderKind::OpenAiCompatible => {
-                true
-            }
-        }
+        // OpenAI-compatible endpoints may be local (LM Studio) but we treat
+        // them conservatively as external unless proven otherwise.
+        !matches!(self, ProviderKind::Ollama)
     }
 }
 
@@ -65,6 +69,12 @@ impl ProviderConfig {
             ProviderKind::Ollama => ("http://localhost:11434", "qwen2.5-coder:14b"),
             ProviderKind::OpenAi => ("https://api.openai.com/v1", "gpt-4o-mini"),
             ProviderKind::Anthropic => ("https://api.anthropic.com", "claude-sonnet-5"),
+            ProviderKind::Gemini => (
+                "https://generativelanguage.googleapis.com",
+                "gemini-2.5-flash",
+            ),
+            ProviderKind::Mistral => ("https://api.mistral.ai/v1", "mistral-large-latest"),
+            ProviderKind::XAi => ("https://api.x.ai/v1", "grok-4"),
             ProviderKind::OpenAiCompatible => ("http://localhost:1234/v1", ""),
         };
         Self {
@@ -74,6 +84,45 @@ impl ProviderConfig {
             default_model: default_model.to_string(),
             allow_send_code: !kind.is_external(),
             has_api_key: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL: [ProviderKind; 7] = [
+        ProviderKind::Ollama,
+        ProviderKind::OpenAi,
+        ProviderKind::Anthropic,
+        ProviderKind::Gemini,
+        ProviderKind::Mistral,
+        ProviderKind::XAi,
+        ProviderKind::OpenAiCompatible,
+    ];
+
+    #[test]
+    fn kind_string_roundtrip() {
+        for kind in ALL {
+            assert_eq!(ProviderKind::parse(kind.as_str()), Some(kind));
+        }
+        assert_eq!(ProviderKind::parse("unknown"), None);
+    }
+
+    #[test]
+    fn only_ollama_is_local() {
+        for kind in ALL {
+            assert_eq!(kind.is_external(), kind != ProviderKind::Ollama);
+        }
+    }
+
+    #[test]
+    fn defaults_disable_code_sending_for_external_providers() {
+        for kind in ALL {
+            let config = ProviderConfig::default_for(kind);
+            assert_eq!(config.allow_send_code, !kind.is_external());
+            assert!(!config.base_url.is_empty());
         }
     }
 }

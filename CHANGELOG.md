@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Google Gemini provider adapter (Generative Language API).
+- Mistral and xAI (Grok) providers via the OpenAI-compatible adapter.
+
 ## [0.1.0] - 2026-07-08
 
 ### Added
