@@ -96,10 +96,14 @@ export function ChatView({ workspace, providers }: Props) {
         </select>
         <textarea
           value={input}
-          placeholder="Ask about your code and docs… (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (
+              e.key === "Enter" &&
+              (e.ctrlKey || e.metaKey) &&
+              !e.nativeEvent.isComposing
+            ) {
               e.preventDefault();
               if (!chat.busy && input.trim()) void submit();
             }
