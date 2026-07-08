@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { IndexReport, Workspace } from "../../domain/types";
+import { useAppVersion } from "../../application/useAppVersion";
 
 interface Props {
   workspaces: Workspace[];
@@ -27,6 +28,7 @@ export function WorkspaceSidebar({
 }: Props) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const version = useAppVersion();
 
   const addWorkspace = async () => {
     setError(null);
@@ -117,6 +119,7 @@ export function WorkspaceSidebar({
 
       <div className="sidebar-footer">
         <button onClick={onOpenSettings}>⚙ AI Providers</button>
+        {version && <span className="app-version">v{version}</span>}
       </div>
     </aside>
   );

@@ -31,3 +31,21 @@ npm run tauri dev
 # Rust tests
 cd src-tauri && cargo test
 ```
+
+## Versioning
+
+The project follows [Semantic Versioning](https://semver.org/); `package.json`
+is the single source of truth and `scripts/bump-version.mjs` propagates the
+version to `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, and `CHANGELOG.md`
+(the `[Unreleased]` section is promoted to the new release):
+
+```bash
+npm run version:patch   # or version:minor / version:major
+git add -A && git commit -m "Release vX.Y.Z"
+git tag vX.Y.Z
+```
+
+Release notes are kept in [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog
+format) — add entries under `[Unreleased]` as you work. The SQLite schema is
+versioned independently via `PRAGMA user_version` migrations in
+`src-tauri/src/infrastructure/persistence/mod.rs` (append-only).
