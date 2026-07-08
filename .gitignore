@@ -1,0 +1,20 @@
+# Core project documents (kept local only)
+docs/
+
+# Node
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Local data
+*.sqlite
+*.db
+
+# OS / editor
+.DS_Store
+*.log
+.vscode/
+.idea/
