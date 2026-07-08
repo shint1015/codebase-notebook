@@ -47,13 +47,52 @@ impl Db {
         self.conn.lock().expect("db mutex poisoned")
     }
 
-    fn migrate(&self) -> DomainResult<()> {
-        let conn = self.lock();
-        conn.execute_batch(
-            r#"
-            PRAGMA foreign_keys = ON;
-            PRAGMA journal_mode = WAL;
+    /// Current schema version = number of applied migrations (PRAGMA user_version).
+    pub fn schema_version(&self) -> DomainResult<i64> {
+        self.lock()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| DomainError::Storage(format!("read schema version: {e}")))
+    }
 
+    /// Versioned migration runner. Each entry in `MIGRATIONS` is applied in a
+    /// transaction exactly once; `PRAGMA user_version` records how far this
+    /// database has migrated. To evolve the schema, APPEND a new entry —
+    /// never edit an existing one.
+    fn migrate(&self) -> DomainResult<()> {
+        let mut conn = self.lock();
+        // Connection settings, not schema — applied on every open.
+        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
+            .map_err(|e| DomainError::Storage(format!("pragma setup: {e}")))?;
+
+        let current: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| DomainError::Storage(format!("read schema version: {e}")))?;
+
+        for (index, sql) in MIGRATIONS.iter().enumerate() {
+            let version = (index + 1) as i64;
+            if version <= current {
+                continue;
+            }
+            let tx = conn
+                .transaction()
+                .map_err(|e| DomainError::Storage(format!("begin migration {version}: {e}")))?;
+            tx.execute_batch(sql)
+                .map_err(|e| DomainError::Storage(format!("apply migration {version}: {e}")))?;
+            tx.pragma_update(None, "user_version", version)
+                .map_err(|e| DomainError::Storage(format!("bump schema version: {e}")))?;
+            tx.commit()
+                .map_err(|e| DomainError::Storage(format!("commit migration {version}: {e}")))?;
+        }
+        Ok(())
+    }
+}
+
+/// Ordered schema migrations, 1-based. Append-only.
+/// v1 uses IF NOT EXISTS so databases created before versioning was
+/// introduced adopt user_version=1 without failing.
+const MIGRATIONS: &[&str] = &[
+    // v1: initial schema
+    r#"
             CREATE TABLE IF NOT EXISTS workspaces (
                 id             TEXT PRIMARY KEY,
                 name           TEXT NOT NULL,
@@ -117,11 +156,7 @@ impl Db {
                 allow_send_code INTEGER NOT NULL
             );
             "#,
-        )
-        .map_err(|e| DomainError::Storage(format!("migrate: {e}")))?;
-        Ok(())
-    }
-}
+];
 
 pub(crate) fn storage_err<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> DomainError + '_ {
     move |e| DomainError::Storage(format!("{context}: {e}"))
@@ -157,5 +192,19 @@ mod tests {
     fn migrations_are_idempotent() {
         let db = Db::open_in_memory().unwrap();
         db.migrate().unwrap();
+    }
+
+    #[test]
+    fn schema_version_matches_migration_count() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.schema_version().unwrap(), MIGRATIONS.len() as i64);
+    }
+
+    #[test]
+    fn already_migrated_versions_are_skipped() {
+        let db = Db::open_in_memory().unwrap();
+        let before = db.schema_version().unwrap();
+        db.migrate().unwrap();
+        assert_eq!(db.schema_version().unwrap(), before);
     }
 }
