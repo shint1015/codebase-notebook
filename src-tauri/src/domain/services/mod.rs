@@ -75,6 +75,20 @@ pub trait IssueFetcher: Send + Sync {
     async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>>;
 }
 
+/// Creates issues on a remote tracker using the user's own credentials.
+/// Only invoked by an explicit user action.
+#[async_trait]
+pub trait IssuePublisher: Send + Sync {
+    /// Returns the URL of the created issue.
+    async fn create_issue(&self, spec: &str, title: &str, body: &str) -> DomainResult<String>;
+}
+
+/// Git working-tree synchronization for app-managed clones (wiki publishing).
+pub trait GitSync: Send + Sync {
+    fn pull(&self, repo_path: &str) -> DomainResult<()>;
+    fn commit_and_push(&self, repo_path: &str, message: &str) -> DomainResult<()>;
+}
+
 /// Resolves the concrete LLM adapter for a provider kind (model router).
 pub trait ProviderRouter: Send + Sync {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<std::sync::Arc<dyn LlmProvider>>;

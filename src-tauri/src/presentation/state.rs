@@ -5,6 +5,7 @@ use crate::application::usecases::ask::AskUseCase;
 use crate::application::usecases::chat::ChatUseCases;
 use crate::application::usecases::index::IndexWorkspaceUseCase;
 use crate::application::usecases::provider::ProviderUseCases;
+use crate::application::usecases::publish::PublishUseCases;
 use crate::application::usecases::repository::RepositoryUseCases;
 use crate::application::usecases::search::SearchUseCase;
 use crate::application::usecases::workspace::WorkspaceUseCases;
@@ -34,6 +35,7 @@ const EMBEDDING_MODEL: &str = "nomic-embed-text";
 pub struct AppState {
     pub workspaces: WorkspaceUseCases,
     pub repositories: RepositoryUseCases,
+    pub publish: PublishUseCases,
     pub chats: ChatUseCases,
     pub providers: ProviderUseCases,
     pub index: IndexWorkspaceUseCase,
@@ -59,6 +61,7 @@ impl AppState {
         let secret_scanner = Arc::new(RegexSecretScanner::new());
         let scanner = Arc::new(FsSourceScanner);
         let cloner = Arc::new(GitCliCloner);
+        let issue_service = Arc::new(GitHubIssueFetcher);
 
         let ollama_base_url = provider_repo
             .find(ProviderKind::Ollama)?
@@ -79,10 +82,11 @@ impl AppState {
                 workspace_repo.clone(),
                 repository_repo.clone(),
                 document_repo.clone(),
-                cloner,
-                Arc::new(GitHubIssueFetcher),
+                cloner.clone(),
+                issue_service.clone(),
                 clones_dir,
             ),
+            publish: PublishUseCases::new(repository_repo.clone(), issue_service, cloner),
             chats: ChatUseCases::new(chat_repo.clone()),
             providers: ProviderUseCases::new(
                 provider_repo.clone(),

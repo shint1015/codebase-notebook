@@ -116,6 +116,36 @@ pub fn delete_repository(
     Ok(state.repositories.remove(&repository_id)?)
 }
 
+// ---- publishing ----
+
+#[tauri::command]
+pub async fn create_github_issue(
+    state: State<'_, AppState>,
+    spec: String,
+    title: String,
+    body: String,
+) -> CommandResult<String> {
+    Ok(state.publish.create_issue(&spec, &title, &body).await?)
+}
+
+#[tauri::command]
+pub fn list_wiki_repositories(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> CommandResult<Vec<Repository>> {
+    Ok(state.publish.wiki_repositories(&workspace_id)?)
+}
+
+#[tauri::command]
+pub fn write_wiki_page(
+    state: State<'_, AppState>,
+    repository_id: String,
+    title: String,
+    content: String,
+) -> CommandResult<String> {
+    Ok(state.publish.write_wiki_page(&repository_id, &title, &content)?)
+}
+
 #[tauri::command]
 pub fn set_workspace_allow_external(
     state: State<'_, AppState>,

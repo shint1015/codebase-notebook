@@ -129,6 +129,37 @@ async fn fetch_via_rest(spec: &str) -> DomainResult<Vec<ApiIssue>> {
 }
 
 #[async_trait]
+impl crate::domain::services::IssuePublisher for GitHubIssueFetcher {
+    async fn create_issue(&self, spec: &str, title: &str, body: &str) -> DomainResult<String> {
+        let (spec, title, body) = (spec.to_string(), title.to_string(), body.to_string());
+        tauri::async_runtime::spawn_blocking(move || {
+            if !gh_available() {
+                return Err(DomainError::Indexing(
+                    "creating issues requires the gh CLI — install it and run `gh auth login`"
+                        .into(),
+                ));
+            }
+            let output = std::process::Command::new("gh")
+                .args([
+                    "issue", "create", "-R", &spec, "--title", &title, "--body", &body,
+                ])
+                .output()
+                .map_err(|e| DomainError::Indexing(format!("run gh: {e}")))?;
+            if !output.status.success() {
+                return Err(DomainError::Indexing(format!(
+                    "gh issue create failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )));
+            }
+            // gh prints the created issue URL on stdout.
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        })
+        .await
+        .map_err(|e| DomainError::Indexing(format!("gh task failed: {e}")))?
+    }
+}
+
+#[async_trait]
 impl IssueFetcher for GitHubIssueFetcher {
     async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>> {
         let spec = spec.to_string();
