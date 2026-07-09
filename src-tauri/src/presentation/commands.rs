@@ -97,6 +97,18 @@ pub async fn add_git_repository(
 }
 
 #[tauri::command]
+pub async fn add_github_issues_repository(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    spec: String,
+) -> CommandResult<Repository> {
+    Ok(state
+        .repositories
+        .add_github_issues(&workspace_id, &spec)
+        .await?)
+}
+
+#[tauri::command]
 pub fn delete_repository(
     state: State<'_, AppState>,
     repository_id: String,

@@ -15,7 +15,7 @@ use codebase_notebook_lib::domain::entities::provider::{ProviderConfig, Provider
 use codebase_notebook_lib::domain::error::{DomainError, DomainResult};
 use codebase_notebook_lib::domain::repositories::ProviderConfigRepository;
 use codebase_notebook_lib::domain::services::{
-    ChatTurn, EmbeddingProvider, LlmProvider, ProviderRouter,
+    ChatTurn, EmbeddingProvider, IssueDoc, IssueFetcher, LlmProvider, ProviderRouter,
 };
 use codebase_notebook_lib::infrastructure::indexing::git::GitCliCloner;
 use codebase_notebook_lib::infrastructure::indexing::scanner::FsSourceScanner;
@@ -64,6 +64,37 @@ struct FakeRouter;
 impl ProviderRouter for FakeRouter {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<Arc<dyn LlmProvider>> {
         Ok(Arc::new(CitingLlm(kind)))
+    }
+}
+
+/// Two fake issues, no network.
+struct FakeIssueFetcher;
+
+#[async_trait]
+impl IssueFetcher for FakeIssueFetcher {
+    async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>> {
+        Ok(vec![
+            IssueDoc {
+                number: 1,
+                title: "Crash on startup".into(),
+                state: "open".into(),
+                author: "alice".into(),
+                labels: vec!["bug".into()],
+                body: format!("The app from {spec} crashes when the config is missing."),
+                url: format!("https://github.com/{spec}/issues/1"),
+                created_at: "2026-01-01T00:00:00Z".into(),
+            },
+            IssueDoc {
+                number: 2,
+                title: "Add dark mode".into(),
+                state: "closed".into(),
+                author: "bob".into(),
+                labels: vec![],
+                body: "Please support a dark theme.".into(),
+                url: format!("https://github.com/{spec}/issues/2"),
+                created_at: "2026-01-02T00:00:00Z".into(),
+            },
+        ])
     }
 }
 
@@ -130,6 +161,7 @@ async fn setup() -> Harness {
         repository_repo.clone(),
         document_repo.clone(),
         Arc::new(GitCliCloner),
+        Arc::new(FakeIssueFetcher),
         tmp.path().join("clones"),
     );
     repositories
@@ -348,6 +380,56 @@ async fn multiple_repositories_index_and_remove_independently() {
         .await
         .unwrap();
     assert!(!still.is_empty());
+}
+
+#[tokio::test]
+async fn single_file_and_github_issues_sources() {
+    let h = setup().await;
+
+    // Single file as a source.
+    let notes = h._tmp.path().join("meeting-notes.md");
+    std::fs::write(&notes, "# Meeting\n\nDecided to migrate the queue to NATS.").unwrap();
+    let file_repo = h
+        .repositories
+        .add_local(&h.workspace_id, notes.to_str().unwrap())
+        .unwrap();
+    assert_eq!(file_repo.name, "meeting-notes.md");
+
+    // GitHub issues (via fake fetcher) materialized as markdown.
+    let issues_repo = h
+        .repositories
+        .add_github_issues(&h.workspace_id, "https://github.com/acme/app/issues")
+        .await
+        .unwrap();
+    assert_eq!(issues_repo.name, "app-issues");
+    assert!(issues_repo.remote_url.as_deref() == Some("https://github.com/acme/app/issues"));
+
+    let report = h.index.execute(&h.workspace_id).await.unwrap();
+    // 2 code files + 1 note file + 2 issue files
+    assert_eq!(report.files_indexed, 5);
+
+    // Both new sources are searchable with their repo-name prefixes.
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "migrate queue NATS", 10)
+        .await
+        .unwrap();
+    assert!(hits.iter().any(|hit| hit.rel_path == "meeting-notes.md"));
+
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "crash startup config missing", 10)
+        .await
+        .unwrap();
+    assert!(hits
+        .iter()
+        .any(|hit| hit.rel_path == "app-issues/issue-00001.md"));
+
+    // Removing the issues repo also removes the materialized files.
+    let dir = issues_repo.root_path.clone();
+    assert!(std::path::Path::new(&dir).exists());
+    h.repositories.remove(&issues_repo.id).unwrap();
+    assert!(!std::path::Path::new(&dir).exists());
 }
 
 #[tokio::test]
