@@ -343,6 +343,15 @@ textarea:focus {
   width: 280px;
 }
 
+.repo-add.remote-row {
+  width: 100%;
+}
+
+.repo-add.remote-row input {
+  flex: 1;
+  width: auto;
+}
+
 .repo-list,
 .session-list {
   list-style: none;
