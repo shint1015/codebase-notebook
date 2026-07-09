@@ -25,6 +25,7 @@ use codebase_notebook_lib::infrastructure::persistence::document_repo::SqliteDoc
 use codebase_notebook_lib::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
 use codebase_notebook_lib::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
 use codebase_notebook_lib::infrastructure::persistence::settings_repo::SqliteSettingsRepository;
+use codebase_notebook_lib::infrastructure::persistence::usage_repo::SqliteUsageRepository;
 use codebase_notebook_lib::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use codebase_notebook_lib::infrastructure::persistence::Db;
 use codebase_notebook_lib::infrastructure::secrets::scanner::RegexSecretScanner;
@@ -156,6 +157,7 @@ async fn setup() -> Harness {
     let document_repo = Arc::new(SqliteDocumentRepository::new(db.clone()));
     let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
     let settings_repo = Arc::new(SqliteSettingsRepository::new(db.clone()));
+    let usage_repo = Arc::new(SqliteUsageRepository::new(db.clone()));
     let provider_repo = Arc::new(SqliteProviderConfigRepository::new(db));
     let embedder = Arc::new(NoEmbedding);
     let search = Arc::new(SearchUseCase::new(
@@ -202,6 +204,7 @@ async fn setup() -> Harness {
             document_repo.clone(),
             chat_repo,
             provider_repo.clone(),
+            usage_repo,
             Arc::new(FakeRouter),
             search.clone(),
         ),

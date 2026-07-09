@@ -87,6 +87,18 @@ export const api = {
       sessionId,
     }),
 
+  listUsage: (limit?: number) =>
+    invoke<import("../domain/types").UsageRecord[]>("list_usage", { limit }),
+  usageSummary: () =>
+    invoke<import("../domain/types").ProviderUsageSummary[]>("usage_summary"),
+  ollamaStatus: () =>
+    invoke<import("../domain/types").OllamaStatus>("ollama_status"),
+  pullOllamaModel: (model: string, onProgress: (line: string) => void) => {
+    const channel = new Channel<string>();
+    channel.onmessage = onProgress;
+    return invoke<void>("pull_ollama_model", { model, onProgress: channel });
+  },
+
   getSearchSettings: () =>
     invoke<{ embedding_model: string; rerank_enabled: boolean }>(
       "get_search_settings",

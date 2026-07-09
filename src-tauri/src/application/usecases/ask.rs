@@ -7,10 +7,12 @@ use crate::domain::entities::chat::{Citation, Message, Role};
 use crate::domain::entities::chunk::SearchHit;
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::entities::provider::estimate_cost_usd;
 use crate::domain::entities::repository::Repository;
+use crate::domain::entities::usage::UsageRecord;
 use crate::domain::repositories::{
     ChatRepository, DocumentRepository, ProviderConfigRepository, RepositoryRepository,
-    WorkspaceRepository,
+    UsageRepository, WorkspaceRepository,
 };
 use crate::domain::services::{ChatTurn, ProviderRouter, TokenSink};
 
@@ -43,6 +45,7 @@ pub struct AskUseCase {
     documents: Arc<dyn DocumentRepository>,
     chats: Arc<dyn ChatRepository>,
     providers: Arc<dyn ProviderConfigRepository>,
+    usage: Arc<dyn UsageRepository>,
     router: Arc<dyn ProviderRouter>,
     search: Arc<SearchUseCase>,
 }
@@ -54,6 +57,7 @@ impl AskUseCase {
         documents: Arc<dyn DocumentRepository>,
         chats: Arc<dyn ChatRepository>,
         providers: Arc<dyn ProviderConfigRepository>,
+        usage: Arc<dyn UsageRepository>,
         router: Arc<dyn ProviderRouter>,
         search: Arc<SearchUseCase>,
     ) -> Self {
@@ -63,9 +67,30 @@ impl AskUseCase {
             documents,
             chats,
             providers,
+            usage,
             router,
             search,
         }
+    }
+
+    /// Hard stop when this month's estimated spend already exceeds the
+    /// provider's budget.
+    fn ensure_within_budget(
+        &self,
+        provider: ProviderKind,
+        budget: Option<f64>,
+    ) -> DomainResult<()> {
+        let Some(budget) = budget else { return Ok(()) };
+        let month: String = chrono::Utc::now().format("%Y-%m").to_string();
+        let spent = self.usage.month_total_usd(provider.as_str(), &month)?;
+        if spent >= budget {
+            return Err(DomainError::Validation(format!(
+                "monthly budget for {} reached (${spent:.2} of ${budget:.2}) — raise the \
+                 budget in settings or use the local model",
+                provider.as_str()
+            )));
+        }
+        Ok(())
     }
 
     /// A question can only be grounded if something is indexed. Guides the
@@ -204,6 +229,7 @@ impl AskUseCase {
             if !workspace.allow_external && !consent_granted {
                 return Err(DomainError::ConsentRequired);
             }
+            self.ensure_within_budget(provider, config.monthly_budget_usd)?;
         }
 
         let query = self.retrieval_query(Some(session_id), question).await;
@@ -239,6 +265,28 @@ impl AskUseCase {
             .chat_stream(&config.default_model, &system, &turns, on_token)
             .await?;
         let citations = extract_citations(&answer, &hits);
+
+        // Usage accounting + audit trail (which sources were in the prompt).
+        let prompt_chars =
+            system.chars().count() + turns.iter().map(|t| t.content.chars().count()).sum::<usize>();
+        let completion_chars = answer.chars().count();
+        let record = UsageRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            provider: provider.as_str().to_string(),
+            model: config.default_model.clone(),
+            workspace_id: Some(workspace_id.to_string()),
+            prompt_chars: prompt_chars as i64,
+            completion_chars: completion_chars as i64,
+            est_cost_usd: estimate_cost_usd(
+                provider,
+                &config.default_model,
+                prompt_chars,
+                completion_chars,
+            ),
+            sources: hits.iter().map(|h| h.rel_path.clone()).collect(),
+        };
+        self.usage.append(&record).ok();
 
         let assistant_message = Message {
             id: uuid::Uuid::new_v4().to_string(),

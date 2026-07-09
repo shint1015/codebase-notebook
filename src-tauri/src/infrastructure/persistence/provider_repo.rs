@@ -26,6 +26,7 @@ fn row_to_config(row: &rusqlite::Row<'_>) -> rusqlite::Result<Option<ProviderCon
         base_url: row.get(2)?,
         default_model: row.get(3)?,
         allow_send_code: row.get::<_, i64>(4)? != 0,
+        monthly_budget_usd: row.get(5)?,
         has_api_key: false,
     }))
 }
@@ -35,19 +36,21 @@ impl ProviderConfigRepository for SqliteProviderConfigRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO provider_configs (kind, enabled, base_url, default_model, allow_send_code)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
+                "INSERT INTO provider_configs (kind, enabled, base_url, default_model, allow_send_code, monthly_budget_usd)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(kind) DO UPDATE SET
                    enabled = excluded.enabled,
                    base_url = excluded.base_url,
                    default_model = excluded.default_model,
-                   allow_send_code = excluded.allow_send_code",
+                   allow_send_code = excluded.allow_send_code,
+                   monthly_budget_usd = excluded.monthly_budget_usd",
                 params![
                     config.kind.as_str(),
                     config.enabled as i64,
                     config.base_url,
                     config.default_model,
                     config.allow_send_code as i64,
+                    config.monthly_budget_usd,
                 ],
             )
             .map_err(storage_err("upsert provider config"))?;
@@ -58,7 +61,7 @@ impl ProviderConfigRepository for SqliteProviderConfigRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT kind, enabled, base_url, default_model, allow_send_code
+                "SELECT kind, enabled, base_url, default_model, allow_send_code, monthly_budget_usd
                  FROM provider_configs WHERE kind = ?1",
                 params![kind.as_str()],
                 row_to_config,
@@ -73,7 +76,7 @@ impl ProviderConfigRepository for SqliteProviderConfigRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT kind, enabled, base_url, default_model, allow_send_code
+                "SELECT kind, enabled, base_url, default_model, allow_send_code, monthly_budget_usd
                  FROM provider_configs",
             )
             .map_err(storage_err("prepare list providers"))?;
