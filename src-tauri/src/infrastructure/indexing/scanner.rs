@@ -170,6 +170,28 @@ fn content_hash(content: &str) -> String {
 impl SourceScanner for FsSourceScanner {
     fn scan(&self, root_path: &str) -> DomainResult<Vec<SourceFile>> {
         let root = Path::new(root_path);
+        // Single-file sources: the file itself is the whole tree.
+        if root.is_file() {
+            let size = root.metadata().map(|m| m.len()).unwrap_or(u64::MAX);
+            let Some((content, language)) = Self::read_content(root, size) else {
+                return Err(DomainError::Indexing(format!(
+                    "unsupported or unreadable file: {root_path}"
+                )));
+            };
+            if content.trim().is_empty() {
+                return Ok(Vec::new());
+            }
+            let rel_path = root
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string());
+            return Ok(vec![SourceFile {
+                rel_path,
+                language: language.to_string(),
+                content_hash: content_hash(&content),
+                content,
+            }]);
+        }
         if !root.is_dir() {
             return Err(DomainError::Indexing(format!(
                 "not a directory: {root_path}"

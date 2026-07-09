@@ -14,6 +14,7 @@ use crate::domain::repositories::{
     DocumentRepository, ProviderConfigRepository, RepositoryRepository,
 };
 use crate::infrastructure::indexing::git::GitCliCloner;
+use crate::infrastructure::indexing::github_issues::GitHubIssueFetcher;
 use crate::infrastructure::indexing::scanner::FsSourceScanner;
 use crate::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use crate::infrastructure::persistence::document_repo::SqliteDocumentRepository;
@@ -79,6 +80,7 @@ impl AppState {
                 repository_repo.clone(),
                 document_repo.clone(),
                 cloner,
+                Arc::new(GitHubIssueFetcher),
                 clones_dir,
             ),
             chats: ChatUseCases::new(chat_repo.clone()),

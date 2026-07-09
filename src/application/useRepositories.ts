@@ -61,6 +61,21 @@ export function useRepositories(workspaceId: string | null) {
     [workspaceId, refresh, wrap],
   );
 
+  const addGithubIssues = useCallback(
+    (spec: string) =>
+      wrap(async () => {
+        if (!workspaceId) return;
+        setCloning(true);
+        try {
+          await api.addGithubIssuesRepository(workspaceId, spec);
+          await refresh();
+        } finally {
+          setCloning(false);
+        }
+      }),
+    [workspaceId, refresh, wrap],
+  );
+
   const remove = useCallback(
     (repositoryId: string) =>
       wrap(async () => {
@@ -88,6 +103,7 @@ export function useRepositories(workspaceId: string | null) {
     repositories,
     addLocal,
     addGit,
+    addGithubIssues,
     remove,
     index,
     cloning,

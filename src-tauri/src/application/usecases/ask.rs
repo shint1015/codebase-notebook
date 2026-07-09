@@ -359,6 +359,7 @@ mod tests {
             name: "backend".into(),
             root_path: "/tmp/backend".into(),
             remote_url: Some("https://github.com/org/backend.git".into()),
+            source_kind: crate::domain::entities::repository::SourceKind::Git,
             created_at: "2026-01-01T00:00:00Z".into(),
         }];
         let prompt = build_system_prompt("demo", &repositories, &hits);

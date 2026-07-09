@@ -30,6 +30,7 @@ pub fn run() {
             commands::list_repositories,
             commands::add_local_repository,
             commands::add_git_repository,
+            commands::add_github_issues_repository,
             commands::delete_repository,
             commands::workspace_stats,
             commands::index_workspace,

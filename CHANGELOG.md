@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Single files can be added as sources, not only folders.
+- GitHub issues can be fetched (via the authenticated `gh` CLI, or the public
+  REST API) and indexed as markdown documents; GitHub wikis work through the
+  existing git clone (`….wiki.git`).
+
 ### Changed
 
 - Sidebar now shows the selected workspace's chat list (with "+ New chat")

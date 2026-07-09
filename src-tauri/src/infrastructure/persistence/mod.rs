@@ -186,6 +186,12 @@ const MIGRATIONS: &[&str] = &[
 
             ALTER TABLE workspaces DROP COLUMN root_path;
             "#,
+    // v3: repositories carry an explicit source kind (local folder/file,
+    // git clone, or materialized GitHub issues).
+    r#"
+            ALTER TABLE repositories ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'local';
+            UPDATE repositories SET source_kind = 'git' WHERE remote_url IS NOT NULL;
+            "#,
 ];
 
 pub(crate) fn storage_err<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> DomainError + '_ {

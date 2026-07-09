@@ -54,6 +54,27 @@ pub trait RepoCloner: Send + Sync {
     fn remove_clone(&self, path: &str) -> DomainResult<()>;
 }
 
+/// One issue fetched from a tracker, ready to be materialized as markdown.
+#[derive(Debug, Clone)]
+pub struct IssueDoc {
+    pub number: i64,
+    pub title: String,
+    pub state: String,
+    pub author: String,
+    pub labels: Vec<String>,
+    pub body: String,
+    pub url: String,
+    pub created_at: String,
+}
+
+/// Fetches issues from a remote tracker (e.g. GitHub) so they can be indexed
+/// locally. Network access happens only on the explicit "fetch" action.
+#[async_trait]
+pub trait IssueFetcher: Send + Sync {
+    /// `spec` is "owner/repo".
+    async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>>;
+}
+
 /// Resolves the concrete LLM adapter for a provider kind (model router).
 pub trait ProviderRouter: Send + Sync {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<std::sync::Arc<dyn LlmProvider>>;

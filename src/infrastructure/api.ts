@@ -26,6 +26,8 @@ export const api = {
     invoke<Repository>("add_local_repository", { workspaceId, rootPath }),
   addGitRepository: (workspaceId: string, url: string) =>
     invoke<Repository>("add_git_repository", { workspaceId, url }),
+  addGithubIssuesRepository: (workspaceId: string, spec: string) =>
+    invoke<Repository>("add_github_issues_repository", { workspaceId, spec }),
   deleteRepository: (repositoryId: string) =>
     invoke<void>("delete_repository", { repositoryId }),
   setWorkspaceAllowExternal: (workspaceId: string, allow: boolean) =>
