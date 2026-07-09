@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import type { ChatSession } from "./domain/types";
+import { api } from "./infrastructure/api";
 import { useWorkspaces } from "./application/useWorkspaces";
 import { useProviders } from "./application/useProviders";
 import { useSessions } from "./application/useSessions";
@@ -47,6 +48,22 @@ function App() {
         onOpenSession={openSession}
         onNewChat={() => setView({ kind: "chat", session: null })}
         onCreateWorkspace={ws.create}
+        onRenameSession={async (id, title) => {
+          await api.renameChatSession(id, title);
+          await sessions.refresh();
+          setView((v) =>
+            v.kind === "chat" && v.session?.id === id
+              ? { kind: "chat", session: { ...v.session, title } }
+              : v,
+          );
+        }}
+        onDeleteSession={async (id) => {
+          await api.deleteChatSession(id);
+          await sessions.refresh();
+          setView((v) =>
+            v.kind === "chat" && v.session?.id === id ? { kind: "home" } : v,
+          );
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 

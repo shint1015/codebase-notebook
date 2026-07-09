@@ -32,7 +32,51 @@ impl ChatUseCases {
         self.chats.list_sessions(workspace_id)
     }
 
+    pub fn rename_session(&self, session_id: &str, title: &str) -> DomainResult<()> {
+        let title = title.trim();
+        if title.is_empty() {
+            return Err(DomainError::Validation("session title is empty".into()));
+        }
+        self.chats
+            .rename_session(session_id, &title.chars().take(80).collect::<String>())
+    }
+
+    pub fn delete_session(&self, session_id: &str) -> DomainResult<()> {
+        self.chats.delete_session(session_id)
+    }
+
     pub fn list_messages(&self, session_id: &str) -> DomainResult<Vec<Message>> {
         self.chats.list_messages(session_id)
+    }
+
+    /// Render a session as a markdown transcript (for export).
+    pub fn export_markdown(&self, session_id: &str) -> DomainResult<String> {
+        let messages = self.chats.list_messages(session_id)?;
+        let mut output = String::new();
+        for message in &messages {
+            match message.role {
+                crate::domain::entities::chat::Role::User => {
+                    output.push_str(&format!("## 🧑 Question\n\n{}\n\n", message.content));
+                }
+                crate::domain::entities::chat::Role::Assistant => {
+                    let model = match (&message.provider, &message.model) {
+                        (Some(p), Some(m)) => format!(" ({p} · {m})"),
+                        _ => String::new(),
+                    };
+                    output.push_str(&format!("## 🤖 Answer{model}\n\n{}\n\n", message.content));
+                    if !message.citations.is_empty() {
+                        output.push_str("Sources:\n");
+                        for c in &message.citations {
+                            output.push_str(&format!(
+                                "- [{}] {} (lines {}-{})\n",
+                                c.marker, c.rel_path, c.start_line, c.end_line
+                            ));
+                        }
+                        output.push('\n');
+                    }
+                }
+            }
+        }
+        Ok(output)
     }
 }

@@ -13,6 +13,8 @@ interface Props {
   onOpenSession: (sessionId: string) => void;
   onNewChat: () => void;
   onCreateWorkspace: (name: string) => Promise<unknown>;
+  onRenameSession: (sessionId: string, title: string) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
   onOpenSettings: () => void;
 }
 
@@ -27,12 +29,23 @@ export function WorkspaceSidebar({
   onOpenSession,
   onNewChat,
   onCreateWorkspace,
+  onRenameSession,
+  onDeleteSession,
   onOpenSettings,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const version = useAppVersion();
+
+  const commitRename = async () => {
+    if (renamingId && renameValue.trim()) {
+      await onRenameSession(renamingId, renameValue.trim());
+    }
+    setRenamingId(null);
+  };
 
   const create = async () => {
     const trimmed = name.trim();
@@ -126,11 +139,50 @@ export function WorkspaceSidebar({
                       className={session.id === activeSessionId ? "active" : ""}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onOpenSession(session.id);
+                        if (renamingId !== session.id) onOpenSession(session.id);
                       }}
                       title={session.title}
                     >
-                      {session.title}
+                      {renamingId === session.id ? (
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void commitRename();
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          onBlur={() => void commitRename()}
+                        />
+                      ) : (
+                        <>
+                          <span className="session-label">{session.title}</span>
+                          <span className="session-actions">
+                            <button
+                              title="Rename"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingId(session.id);
+                                setRenameValue(session.title);
+                              }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              title="Delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Delete chat "${session.title}"?`)) {
+                                  void onDeleteSession(session.id);
+                                }
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        </>
+                      )}
                     </li>
                   ))}
                   {sessions.length === 0 && <li className="empty">No chats yet</li>}

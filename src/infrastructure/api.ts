@@ -62,6 +62,14 @@ export const api = {
     invoke<ChatSession[]>("list_chat_sessions", { workspaceId }),
   listChatMessages: (sessionId: string) =>
     invoke<Message[]>("list_chat_messages", { sessionId }),
+  renameChatSession: (sessionId: string, title: string) =>
+    invoke<void>("rename_chat_session", { sessionId, title }),
+  deleteChatSession: (sessionId: string) =>
+    invoke<void>("delete_chat_session", { sessionId }),
+  exportChat: (sessionId: string, destPath: string) =>
+    invoke<void>("export_chat", { sessionId, destPath }),
+  revealSource: (workspaceId: string, relPath: string, line: number) =>
+    invoke<void>("reveal_source", { workspaceId, relPath, line }),
 
   prepareAsk: (workspaceId: string, question: string, provider: ProviderKind) =>
     invoke<AskPreparation>("prepare_ask", { workspaceId, question, provider }),
