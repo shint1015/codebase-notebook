@@ -1,33 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { ChatSession, Workspace } from "../../domain/types";
-import { api } from "../../infrastructure/api";
+import type { Workspace } from "../../domain/types";
 import { useRepositories } from "../../application/useRepositories";
 
 interface Props {
   workspace: Workspace;
-  onOpenSession: (sessionId: string) => void;
-  onNewChat: () => void;
   onDeleteWorkspace: (id: string) => Promise<void>;
 }
 
 /**
- * Landing view for a workspace: manage its repositories, run indexing, and
- * jump into a chat (existing session or a new one).
+ * Landing view for a workspace: manage its repositories and run indexing.
+ * Chats are navigated from the sidebar.
  */
-export function WorkspaceHome({
-  workspace,
-  onOpenSession,
-  onNewChat,
-  onDeleteWorkspace,
-}: Props) {
+export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
   const repos = useRepositories(workspace.id);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [gitUrl, setGitUrl] = useState("");
-
-  useEffect(() => {
-    void api.listChatSessions(workspace.id).then(setSessions);
-  }, [workspace.id]);
 
   const addLocalFolder = async () => {
     const dir = await open({ directory: true, multiple: false });
@@ -133,27 +120,9 @@ export function WorkspaceHome({
         {repos.error && <div className="error">{repos.error}</div>}
       </section>
 
-      <section className="home-section">
-        <div className="home-section-header">
-          <h3>Chats</h3>
-          <button className="primary" onClick={onNewChat}>
-            + New chat
-          </button>
-        </div>
-        <ul className="session-list">
-          {sessions.map((session) => (
-            <li key={session.id} onClick={() => onOpenSession(session.id)}>
-              <span className="session-title">{session.title}</span>
-              <span className="session-date">
-                {new Date(session.created_at).toLocaleString()}
-              </span>
-            </li>
-          ))}
-          {sessions.length === 0 && (
-            <li className="empty">No chats yet — start one with "New chat".</li>
-          )}
-        </ul>
-      </section>
+      <p className="home-hint">
+        Chats live in the sidebar — pick one or start a "+ New chat".
+      </p>
     </main>
   );
 }
