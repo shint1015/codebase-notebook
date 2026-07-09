@@ -206,7 +206,7 @@ impl RepositoryUseCases {
 }
 
 /// "owner/repo", "https://github.com/owner/repo(.git|/issues|/wiki)" -> "owner/repo"
-fn normalize_github_spec(input: &str) -> Option<String> {
+pub(crate) fn normalize_github_spec(input: &str) -> Option<String> {
     let mut s = input.trim().trim_end_matches('/').to_string();
     for prefix in ["https://github.com/", "http://github.com/", "github.com/"] {
         if let Some(rest) = s.strip_prefix(prefix) {

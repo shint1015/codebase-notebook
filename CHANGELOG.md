@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Publish panel: create GitHub issues (via the authenticated `gh` CLI) and
+  write wiki pages (committed and pushed to the cloned wiki, then re-indexed).
 - Single files can be added as sources, not only folders.
 - GitHub issues can be fetched (via the authenticated `gh` CLI, or the public
   REST API) and indexed as markdown documents; GitHub wikis work through the

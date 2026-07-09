@@ -2,6 +2,7 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "../../domain/types";
 import { useRepositories } from "../../application/useRepositories";
+import { PublishPanel } from "./PublishPanel";
 
 interface Props {
   workspace: Workspace;
@@ -159,6 +160,11 @@ export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
         </div>
         {repos.error && <div className="error">{repos.error}</div>}
       </section>
+
+      <PublishPanel
+        repositories={repos.repositories}
+        onWikiPublished={() => void repos.index()}
+      />
 
       <p className="home-hint">
         Chats live in the sidebar — pick one or start a "+ New chat".

@@ -30,6 +30,11 @@ export const api = {
     invoke<Repository>("add_github_issues_repository", { workspaceId, spec }),
   deleteRepository: (repositoryId: string) =>
     invoke<void>("delete_repository", { repositoryId }),
+
+  createGithubIssue: (spec: string, title: string, body: string) =>
+    invoke<string>("create_github_issue", { spec, title, body }),
+  writeWikiPage: (repositoryId: string, title: string, content: string) =>
+    invoke<string>("write_wiki_page", { repositoryId, title, content }),
   setWorkspaceAllowExternal: (workspaceId: string, allow: boolean) =>
     invoke<void>("set_workspace_allow_external", { workspaceId, allow }),
   workspaceStats: (workspaceId: string) =>
