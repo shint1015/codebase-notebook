@@ -17,12 +17,14 @@ use codebase_notebook_lib::domain::repositories::ProviderConfigRepository;
 use codebase_notebook_lib::domain::services::{
     ChatTurn, EmbeddingProvider, IssueDoc, IssueFetcher, LlmProvider, ProviderRouter,
 };
+use codebase_notebook_lib::infrastructure::indexing::ast_chunker::SmartChunker;
 use codebase_notebook_lib::infrastructure::indexing::git::GitCliCloner;
 use codebase_notebook_lib::infrastructure::indexing::scanner::FsSourceScanner;
 use codebase_notebook_lib::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use codebase_notebook_lib::infrastructure::persistence::document_repo::SqliteDocumentRepository;
 use codebase_notebook_lib::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
 use codebase_notebook_lib::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
+use codebase_notebook_lib::infrastructure::persistence::settings_repo::SqliteSettingsRepository;
 use codebase_notebook_lib::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use codebase_notebook_lib::infrastructure::persistence::Db;
 use codebase_notebook_lib::infrastructure::secrets::scanner::RegexSecretScanner;
@@ -48,6 +50,10 @@ impl LlmProvider for CitingLlm {
         self.0
     }
     async fn chat(&self, _model: &str, system: &str, _turns: &[ChatTurn]) -> DomainResult<String> {
+        // Query-rewrite calls get a plain standalone query back.
+        if system.starts_with("Rewrite") {
+            return Ok("token validation in auth".to_string());
+        }
         assert!(
             system.contains("Answer ONLY from the workspace overview and the numbered sources"),
             "grounding instruction must be present"
@@ -149,9 +155,16 @@ async fn setup() -> Harness {
     let repository_repo = Arc::new(SqliteRepositoryRepository::new(db.clone()));
     let document_repo = Arc::new(SqliteDocumentRepository::new(db.clone()));
     let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
+    let settings_repo = Arc::new(SqliteSettingsRepository::new(db.clone()));
     let provider_repo = Arc::new(SqliteProviderConfigRepository::new(db));
     let embedder = Arc::new(NoEmbedding);
-    let search = Arc::new(SearchUseCase::new(document_repo.clone(), embedder.clone()));
+    let search = Arc::new(SearchUseCase::new(
+        document_repo.clone(),
+        embedder.clone(),
+        Arc::new(FakeRouter),
+        provider_repo.clone(),
+        settings_repo,
+    ));
 
     let workspaces = WorkspaceUseCases::new(workspace_repo.clone());
     let workspace = workspaces.create("demo").unwrap();
@@ -180,6 +193,7 @@ async fn setup() -> Harness {
             document_repo.clone(),
             Arc::new(FsSourceScanner),
             Arc::new(RegexSecretScanner::new()),
+            Arc::new(SmartChunker),
             embedder,
         ),
         ask: AskUseCase::new(
@@ -271,7 +285,7 @@ async fn external_provider_requires_consent() {
     // prepare() reports consent is required and lists the exact sources.
     let preparation = h
         .ask
-        .prepare(&h.workspace_id, "Explain auth", ProviderKind::Anthropic)
+        .prepare(&h.workspace_id, "Explain auth", ProviderKind::Anthropic, None)
         .await
         .unwrap();
     assert!(preparation.is_external);
@@ -297,7 +311,7 @@ async fn external_provider_requires_consent() {
         .unwrap();
     let preparation = h
         .ask
-        .prepare(&h.workspace_id, "Explain auth", ProviderKind::Anthropic)
+        .prepare(&h.workspace_id, "Explain auth", ProviderKind::Anthropic, None)
         .await
         .unwrap();
     assert!(!preparation.requires_consent);
@@ -311,7 +325,7 @@ async fn asking_before_indexing_returns_guidance_error() {
 
     let prepared = h
         .ask
-        .prepare(&h.workspace_id, "What is this?", ProviderKind::Ollama)
+        .prepare(&h.workspace_id, "What is this?", ProviderKind::Ollama, None)
         .await;
     assert!(matches!(prepared, Err(DomainError::Validation(_))));
 
