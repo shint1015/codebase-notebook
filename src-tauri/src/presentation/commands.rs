@@ -267,6 +267,50 @@ pub fn list_chat_messages(
 }
 
 #[tauri::command]
+pub fn rename_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+    title: String,
+) -> CommandResult<()> {
+    Ok(state.chats.rename_session(&session_id, &title)?)
+}
+
+#[tauri::command]
+pub fn delete_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    Ok(state.chats.delete_session(&session_id)?)
+}
+
+#[tauri::command]
+pub fn export_chat(
+    state: State<'_, AppState>,
+    session_id: String,
+    dest_path: String,
+) -> CommandResult<()> {
+    let markdown = state.chats.export_markdown(&session_id)?;
+    std::fs::write(&dest_path, markdown).map_err(|e| CommandError {
+        code: "storage".into(),
+        message: format!("write export: {e}"),
+    })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reveal_source(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    rel_path: String,
+    line: i64,
+) -> CommandResult<()> {
+    let path = state
+        .repositories
+        .resolve_source_path(&workspace_id, &rel_path)?;
+    Ok(crate::infrastructure::reveal::open_in_editor(&path, line)?)
+}
+
+#[tauri::command]
 pub async fn prepare_ask(
     state: State<'_, AppState>,
     workspace_id: String,

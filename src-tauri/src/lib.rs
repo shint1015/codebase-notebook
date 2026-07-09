@@ -44,6 +44,10 @@ pub fn run() {
             commands::create_chat_session,
             commands::list_chat_sessions,
             commands::list_chat_messages,
+            commands::rename_chat_session,
+            commands::delete_chat_session,
+            commands::export_chat,
+            commands::reveal_source,
             commands::prepare_ask,
             commands::ask,
         ])

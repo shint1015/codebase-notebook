@@ -173,6 +173,30 @@ impl RepositoryUseCases {
         Ok(())
     }
 
+    /// Resolve a citation path ("repo/rel/path", or a single-file source's
+    /// bare name) to an absolute path on disk.
+    pub fn resolve_source_path(
+        &self,
+        workspace_id: &str,
+        rel_path: &str,
+    ) -> DomainResult<String> {
+        let repositories = self.repositories.list_by_workspace(workspace_id)?;
+        for repository in &repositories {
+            if rel_path == repository.name {
+                return Ok(repository.root_path.clone());
+            }
+            if let Some(rest) = rel_path.strip_prefix(&format!("{}/", repository.name)) {
+                return Ok(std::path::Path::new(&repository.root_path)
+                    .join(rest)
+                    .to_string_lossy()
+                    .to_string());
+            }
+        }
+        Err(DomainError::NotFound(format!(
+            "no source matches {rel_path}"
+        )))
+    }
+
     /// Remove all app-managed clones of a workspace (used on workspace delete).
     pub fn remove_workspace_clones(&self, workspace_id: &str) -> DomainResult<()> {
         let dir = self.clones_dir.join(workspace_id);

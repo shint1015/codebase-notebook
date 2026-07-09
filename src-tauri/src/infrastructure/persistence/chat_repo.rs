@@ -55,6 +55,32 @@ impl ChatRepository for SqliteChatRepository {
             .map_err(storage_err("read sessions"))
     }
 
+    fn rename_session(&self, session_id: &str, title: &str) -> DomainResult<()> {
+        let changed = self
+            .db
+            .lock()
+            .execute(
+                "UPDATE chat_sessions SET title = ?2 WHERE id = ?1",
+                params![session_id, title],
+            )
+            .map_err(storage_err("rename session"))?;
+        if changed == 0 {
+            return Err(DomainError::NotFound(format!("session {session_id}")));
+        }
+        Ok(())
+    }
+
+    fn delete_session(&self, session_id: &str) -> DomainResult<()> {
+        self.db
+            .lock()
+            .execute(
+                "DELETE FROM chat_sessions WHERE id = ?1",
+                params![session_id],
+            )
+            .map_err(storage_err("delete session"))?;
+        Ok(())
+    }
+
     fn append_message(&self, message: &Message) -> DomainResult<()> {
         let citations_json = serde_json::to_string(&message.citations)
             .map_err(|e| DomainError::Storage(format!("serialize citations: {e}")))?;
