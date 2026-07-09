@@ -571,6 +571,82 @@ textarea:focus {
   font-size: 12px;
 }
 
+/* ---------- ollama banner / usage ---------- */
+
+.ollama-banner {
+  border: 1px solid var(--warn);
+  background: rgba(217, 161, 59, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ollama-banner code {
+  font-family: ui-monospace, monospace;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.ollama-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ollama-progress {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
+
+.usage-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.usage-chip {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--text-dim);
+}
+
+.usage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 11.5px;
+}
+
+.usage-list li {
+  display: grid;
+  grid-template-columns: 1.3fr 1.4fr 0.8fr 0.6fr;
+  gap: 8px;
+  color: var(--text-dim);
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.usage-list li.empty {
+  display: block;
+  border: none;
+}
+
+.usage-when {
+  white-space: nowrap;
+}
+
 /* ---------- publish panel ---------- */
 
 .publish-grid {

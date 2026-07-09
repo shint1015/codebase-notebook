@@ -31,7 +31,65 @@ export function SettingsView({ providers, onConfigure, onTest, onClose }: Props)
           <ProviderCard key={p.kind} config={p} onConfigure={onConfigure} onTest={onTest} />
         ))}
         <SearchSettingsCard />
+        <UsageCard />
       </div>
+    </div>
+  );
+}
+
+function UsageCard() {
+  const [summary, setSummary] = useState<
+    import("../../domain/types").ProviderUsageSummary[]
+  >([]);
+  const [records, setRecords] = useState<
+    import("../../domain/types").UsageRecord[]
+  >([]);
+
+  useEffect(() => {
+    void api.usageSummary().then(setSummary);
+    void api.listUsage(20).then(setRecords);
+  }, []);
+
+  return (
+    <div className="provider-card">
+      <div className="provider-title">
+        <strong>Usage & audit</strong>
+      </div>
+      {summary.length > 0 && (
+        <div className="usage-summary">
+          {summary.map((s) => (
+            <span key={s.provider} className="usage-chip">
+              {s.provider}: ${s.month_total_usd.toFixed(2)}
+              {s.monthly_budget_usd !== null &&
+                ` / $${s.monthly_budget_usd.toFixed(0)}`}{" "}
+              this month
+            </span>
+          ))}
+        </div>
+      )}
+      <ul className="usage-list">
+        {records.map((r) => (
+          <li key={r.id}>
+            <span className="usage-when">
+              {new Date(r.created_at).toLocaleString()}
+            </span>
+            <span>
+              {r.provider} · {r.model}
+            </span>
+            <span title={r.sources.join("\n")}>
+              {r.sources.length} sources
+            </span>
+            <span>${r.est_cost_usd.toFixed(4)}</span>
+          </li>
+        ))}
+        {records.length === 0 && (
+          <li className="empty">No model calls recorded yet.</li>
+        )}
+      </ul>
+      <p className="settings-note">
+        Every model call is logged locally with the exact source files that
+        were included in the prompt. Costs are rough estimates.
+      </p>
     </div>
   );
 }
@@ -105,6 +163,9 @@ function ProviderCard({
   const [baseUrl, setBaseUrl] = useState(config.base_url);
   const [model, setModel] = useState(config.default_model);
   const [allowSendCode, setAllowSendCode] = useState(config.allow_send_code);
+  const [budget, setBudget] = useState(
+    config.monthly_budget_usd === null ? "" : String(config.monthly_budget_usd),
+  );
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -115,6 +176,7 @@ function ProviderCard({
     setSaving(true);
     setStatus(null);
     try {
+      const parsedBudget = budget.trim() === "" ? null : Number(budget);
       await onConfigure(
         {
           kind: config.kind,
@@ -122,6 +184,10 @@ function ProviderCard({
           base_url: baseUrl,
           default_model: model,
           allow_send_code: allowSendCode,
+          monthly_budget_usd:
+            parsedBudget !== null && Number.isFinite(parsedBudget) && parsedBudget > 0
+              ? parsedBudget
+              : null,
         },
         apiKey.trim() ? apiKey.trim() : null,
       );
@@ -182,6 +248,17 @@ function ProviderCard({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={config.has_api_key ? "•••••• (leave blank to keep)" : "paste key"}
+              />
+            </label>
+            <label>
+              Monthly budget (USD)
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="no limit"
               />
             </label>
             <label className="checkbox-row">

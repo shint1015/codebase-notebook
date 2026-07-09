@@ -83,7 +83,34 @@ export interface ProviderConfig {
   base_url: string;
   default_model: string;
   allow_send_code: boolean;
+  monthly_budget_usd: number | null;
   has_api_key: boolean;
+}
+
+export interface UsageRecord {
+  id: string;
+  created_at: string;
+  provider: string;
+  model: string;
+  workspace_id: string | null;
+  prompt_chars: number;
+  completion_chars: number;
+  est_cost_usd: number;
+  sources: string[];
+}
+
+export interface ProviderUsageSummary {
+  provider: string;
+  month_total_usd: number;
+  monthly_budget_usd: number | null;
+}
+
+export interface OllamaStatus {
+  reachable: boolean;
+  chat_model: string;
+  chat_model_present: boolean;
+  embedding_model: string;
+  embedding_model_present: boolean;
 }
 
 export interface ChatSession {

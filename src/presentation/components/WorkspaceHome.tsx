@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "../../domain/types";
 import { useRepositories } from "../../application/useRepositories";
 import { PublishPanel } from "./PublishPanel";
+import { OllamaBanner } from "./OllamaBanner";
 
 interface Props {
   workspace: Workspace;
@@ -67,6 +68,8 @@ export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
           Delete workspace
         </button>
       </header>
+
+      <OllamaBanner />
 
       <section className="home-section">
         <div className="home-section-header">

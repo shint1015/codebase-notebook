@@ -59,6 +59,8 @@ pub struct ProviderConfig {
     pub default_model: String,
     /// Whether code snippets may be sent to this provider at all.
     pub allow_send_code: bool,
+    /// Monthly spend ceiling in USD for external providers (None = no limit).
+    pub monthly_budget_usd: Option<f64>,
     /// True if an API key is registered in the secret store.
     pub has_api_key: bool,
 }
@@ -83,9 +85,58 @@ impl ProviderConfig {
             base_url: base_url.to_string(),
             default_model: default_model.to_string(),
             allow_send_code: !kind.is_external(),
+            monthly_budget_usd: None,
             has_api_key: false,
         }
     }
+}
+
+/// Rough cost estimate in USD. Character counts are converted at ~4 chars
+/// per token; prices are indicative list prices per 1M tokens. Local
+/// providers cost nothing.
+pub fn estimate_cost_usd(
+    kind: ProviderKind,
+    model: &str,
+    prompt_chars: usize,
+    completion_chars: usize,
+) -> f64 {
+    if !kind.is_external() {
+        return 0.0;
+    }
+    let model = model.to_ascii_lowercase();
+    // (input, output) USD per 1M tokens
+    let (input, output) = match kind {
+        ProviderKind::OpenAi => {
+            if model.contains("mini") || model.contains("nano") {
+                (0.15, 0.60)
+            } else {
+                (2.50, 10.00)
+            }
+        }
+        ProviderKind::Anthropic => {
+            if model.contains("haiku") {
+                (0.80, 4.00)
+            } else if model.contains("opus") {
+                (15.00, 75.00)
+            } else {
+                (3.00, 15.00)
+            }
+        }
+        ProviderKind::Gemini => {
+            if model.contains("flash") {
+                (0.30, 2.50)
+            } else {
+                (1.25, 10.00)
+            }
+        }
+        ProviderKind::Mistral => (2.00, 6.00),
+        ProviderKind::XAi => (3.00, 15.00),
+        ProviderKind::OpenAiCompatible => (0.50, 1.50),
+        ProviderKind::Ollama => (0.0, 0.0),
+    };
+    let prompt_tokens = prompt_chars as f64 / 4.0;
+    let completion_tokens = completion_chars as f64 / 4.0;
+    (prompt_tokens * input + completion_tokens * output) / 1_000_000.0
 }
 
 #[cfg(test)]

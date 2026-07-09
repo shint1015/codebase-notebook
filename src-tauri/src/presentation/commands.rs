@@ -226,6 +226,7 @@ pub struct ConfigureProviderInput {
     pub base_url: String,
     pub default_model: String,
     pub allow_send_code: bool,
+    pub monthly_budget_usd: Option<f64>,
     /// Some("") clears the stored key; None leaves it untouched.
     pub api_key: Option<String>,
 }
@@ -242,6 +243,7 @@ pub fn configure_provider(
         base_url: input.base_url,
         default_model: input.default_model,
         allow_send_code: input.allow_send_code,
+        monthly_budget_usd: input.monthly_budget_usd,
         has_api_key: false,
     };
     Ok(state.providers.configure(config, input.api_key)?)
@@ -340,6 +342,96 @@ pub async fn prepare_ask(
         .ask
         .prepare(&workspace_id, &question, kind, session_id.as_deref())
         .await?)
+}
+
+// ---- usage & budgets ----
+
+#[tauri::command]
+pub fn list_usage(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> CommandResult<Vec<crate::domain::entities::usage::UsageRecord>> {
+    Ok(state.usage.list_recent(limit.unwrap_or(50))?)
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProviderUsageSummary {
+    pub provider: String,
+    pub month_total_usd: f64,
+    pub monthly_budget_usd: Option<f64>,
+}
+
+#[tauri::command]
+pub fn usage_summary(state: State<'_, AppState>) -> CommandResult<Vec<ProviderUsageSummary>> {
+    let month = chrono::Utc::now().format("%Y-%m").to_string();
+    let mut summary = Vec::new();
+    for config in state.providers.list()? {
+        if !config.kind.is_external() {
+            continue;
+        }
+        summary.push(ProviderUsageSummary {
+            provider: config.kind.as_str().to_string(),
+            month_total_usd: state.usage.month_total_usd(config.kind.as_str(), &month)?,
+            monthly_budget_usd: config.monthly_budget_usd,
+        });
+    }
+    Ok(summary)
+}
+
+// ---- ollama onboarding ----
+
+#[derive(Debug, Serialize)]
+pub struct OllamaStatus {
+    pub reachable: bool,
+    pub chat_model: String,
+    pub chat_model_present: bool,
+    pub embedding_model: String,
+    pub embedding_model_present: bool,
+}
+
+#[tauri::command]
+pub async fn ollama_status(state: State<'_, AppState>) -> CommandResult<OllamaStatus> {
+    use crate::infrastructure::providers::ollama::OllamaAdmin;
+    let config = state
+        .providers
+        .list()?
+        .into_iter()
+        .find(|c| c.kind == ProviderKind::Ollama)
+        .unwrap_or_else(|| ProviderConfig::default_for(ProviderKind::Ollama));
+    let embedding_model = state
+        .settings
+        .get("embedding_model")?
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| super::state::EMBEDDING_MODEL.to_string());
+    let admin = OllamaAdmin::new(&config.base_url);
+    let (reachable, installed) = admin.installed_models().await;
+    Ok(OllamaStatus {
+        reachable,
+        chat_model_present: OllamaAdmin::has_model(&installed, &config.default_model),
+        chat_model: config.default_model,
+        embedding_model_present: OllamaAdmin::has_model(&installed, &embedding_model),
+        embedding_model,
+    })
+}
+
+#[tauri::command]
+pub async fn pull_ollama_model(
+    state: State<'_, AppState>,
+    model: String,
+    on_progress: tauri::ipc::Channel<String>,
+) -> CommandResult<()> {
+    use crate::infrastructure::providers::ollama::OllamaAdmin;
+    let config = state
+        .providers
+        .list()?
+        .into_iter()
+        .find(|c| c.kind == ProviderKind::Ollama)
+        .unwrap_or_else(|| ProviderConfig::default_for(ProviderKind::Ollama));
+    let admin = OllamaAdmin::new(&config.base_url);
+    let sink = move |line: &str| {
+        on_progress.send(line.to_string()).ok();
+    };
+    Ok(admin.pull(&model, &sink).await?)
 }
 
 // ---- search settings ----

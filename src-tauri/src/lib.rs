@@ -82,6 +82,10 @@ pub fn run() {
             commands::ask,
             commands::get_search_settings,
             commands::set_search_settings,
+            commands::list_usage,
+            commands::usage_summary,
+            commands::ollama_status,
+            commands::pull_ollama_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

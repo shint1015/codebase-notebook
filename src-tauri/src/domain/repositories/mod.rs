@@ -62,3 +62,11 @@ pub trait ProviderConfigRepository: Send + Sync {
     fn find(&self, kind: ProviderKind) -> DomainResult<Option<ProviderConfig>>;
     fn list(&self) -> DomainResult<Vec<ProviderConfig>>;
 }
+
+pub trait UsageRepository: Send + Sync {
+    fn append(&self, record: &crate::domain::entities::usage::UsageRecord) -> DomainResult<()>;
+    fn list_recent(&self, limit: usize)
+        -> DomainResult<Vec<crate::domain::entities::usage::UsageRecord>>;
+    /// Total estimated USD spend for a provider in a month ("YYYY-MM").
+    fn month_total_usd(&self, provider: &str, month: &str) -> DomainResult<f64>;
+}

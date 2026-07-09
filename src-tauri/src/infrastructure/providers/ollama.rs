@@ -181,6 +181,96 @@ struct OllamaModelTag {
     name: String,
 }
 
+/// Administrative helpers for onboarding: detect what's installed, pull
+/// models with progress.
+pub struct OllamaAdmin {
+    base_url: String,
+}
+
+fn model_matches(installed: &str, wanted: &str) -> bool {
+    installed == wanted || installed.starts_with(&format!("{wanted}:"))
+}
+
+impl OllamaAdmin {
+    pub fn new(base_url: &str) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+        }
+    }
+
+    /// (reachable, installed model names). Unreachable → (false, []).
+    pub async fn installed_models(&self) -> (bool, Vec<String>) {
+        let Ok(response) = probe_client()
+            .get(format!("{}/api/tags", self.base_url))
+            .send()
+            .await
+        else {
+            return (false, Vec::new());
+        };
+        match response.json::<OllamaTagsResponse>().await {
+            Ok(tags) => (true, tags.models.into_iter().map(|m| m.name).collect()),
+            Err(_) => (true, Vec::new()),
+        }
+    }
+
+    pub fn has_model(installed: &[String], wanted: &str) -> bool {
+        installed.iter().any(|m| model_matches(m, wanted))
+    }
+
+    /// Pull a model, forwarding human-readable progress lines.
+    pub async fn pull(&self, model: &str, on_progress: &crate::domain::services::TokenSink) -> DomainResult<()> {
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| DomainError::Provider(format!("http client: {e}")))?;
+        let response = client
+            .post(format!("{}/api/pull", self.base_url))
+            .json(&json!({"model": model, "stream": true}))
+            .send()
+            .await
+            .map_err(|e| DomainError::Provider(format!("ollama pull: {e}")))?;
+        if !response.status().is_success() {
+            return Err(DomainError::Provider(format!(
+                "ollama pull returned {}",
+                response.status()
+            )));
+        }
+        #[derive(Deserialize)]
+        struct PullLine {
+            #[serde(default)]
+            status: String,
+            #[serde(default)]
+            completed: Option<u64>,
+            #[serde(default)]
+            total: Option<u64>,
+            #[serde(default)]
+            error: Option<String>,
+        }
+        let mut failed: Option<String> = None;
+        for_each_line(response, |line| {
+            if let Ok(parsed) = serde_json::from_str::<PullLine>(line) {
+                if let Some(error) = parsed.error {
+                    failed = Some(error);
+                    return Ok(());
+                }
+                let progress = match (parsed.completed, parsed.total) {
+                    (Some(done), Some(total)) if total > 0 => {
+                        format!("{} — {}%", parsed.status, done * 100 / total)
+                    }
+                    _ => parsed.status,
+                };
+                on_progress(&progress);
+            }
+            Ok(())
+        })
+        .await?;
+        match failed {
+            Some(error) => Err(DomainError::Provider(format!("ollama pull failed: {error}"))),
+            None => Ok(()),
+        }
+    }
+}
+
 #[async_trait]
 impl EmbeddingProvider for OllamaEmbedding {
     async fn embed(&self, texts: &[String]) -> DomainResult<Vec<Vec<f32>>> {
