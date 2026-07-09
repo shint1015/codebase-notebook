@@ -2,6 +2,7 @@ use std::path::Path;
 
 use walkdir::WalkDir;
 
+use super::extract;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::services::{SourceFile, SourceScanner};
 
@@ -36,11 +37,32 @@ const SKIP_FILES: &[&str] = &[
 ];
 
 const MAX_FILE_BYTES: u64 = 1_000_000;
+/// Binary documents (Word/Excel/PDF) are allowed to be larger since only the
+/// extracted text — not the file — enters the index.
+const MAX_DOCUMENT_BYTES: u64 = 25_000_000;
+
+/// Formats that need text extraction instead of a plain UTF-8 read.
+#[derive(Clone, Copy)]
+enum BinaryFormat {
+    Word,
+    Spreadsheet,
+    Pdf,
+}
+
+const BINARY_EXTENSIONS: &[(&str, &str, BinaryFormat)] = &[
+    ("docx", "word", BinaryFormat::Word),
+    ("xlsx", "excel", BinaryFormat::Spreadsheet),
+    ("xls", "excel", BinaryFormat::Spreadsheet),
+    ("ods", "excel", BinaryFormat::Spreadsheet),
+    ("pdf", "pdf", BinaryFormat::Pdf),
+];
 
 const EXTENSIONS: &[(&str, &str)] = &[
     ("md", "markdown"),
     ("markdown", "markdown"),
     ("txt", "text"),
+    ("csv", "csv"),
+    ("tsv", "csv"),
     ("rs", "rust"),
     ("ts", "typescript"),
     ("tsx", "typescript"),
@@ -94,9 +116,44 @@ impl FsSourceScanner {
             return true;
         };
         let lower = name.to_ascii_lowercase();
-        SKIP_FILES
+        // "~$" prefixed files are Office lock files.
+        lower.starts_with("~$")
+            || SKIP_FILES
+                .iter()
+                .any(|skip| lower == *skip || lower.starts_with(&format!("{skip}.")))
+    }
+
+    fn binary_format_for(path: &Path) -> Option<(&'static str, BinaryFormat)> {
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        BINARY_EXTENSIONS
             .iter()
-            .any(|skip| lower == *skip || lower.starts_with(&format!("{skip}.")))
+            .find(|(e, _, _)| *e == ext)
+            .map(|(_, lang, format)| (*lang, *format))
+    }
+
+    /// Read a file's indexable text: plain UTF-8 for source/text files,
+    /// extracted text for Word/Excel/PDF. Returns None for files that should
+    /// be skipped (unreadable, extraction failed, empty).
+    fn read_content(path: &Path, size: u64) -> Option<(String, &'static str)> {
+        if let Some((language, format)) = Self::binary_format_for(path) {
+            if size > MAX_DOCUMENT_BYTES {
+                return None;
+            }
+            let extracted = match format {
+                BinaryFormat::Word => extract::extract_docx(path),
+                BinaryFormat::Spreadsheet => extract::extract_spreadsheet(path),
+                BinaryFormat::Pdf => extract::extract_pdf(path),
+            };
+            // Extraction failures (corrupt file, image-only PDF) skip the
+            // file rather than aborting the whole indexing run.
+            return extracted.ok().map(|content| (content, language));
+        }
+        let language = Self::language_for(path)?;
+        if size > MAX_FILE_BYTES {
+            return None;
+        }
+        let content = std::fs::read_to_string(path).ok()?; // non-UTF8 / unreadable
+        Some((content, language))
     }
 }
 
@@ -135,14 +192,9 @@ impl SourceScanner for FsSourceScanner {
             if Self::should_skip_file(path) {
                 continue;
             }
-            let Some(language) = Self::language_for(path) else {
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(u64::MAX);
+            let Some((content, language)) = Self::read_content(path, size) else {
                 continue;
-            };
-            if entry.metadata().map(|m| m.len()).unwrap_or(u64::MAX) > MAX_FILE_BYTES {
-                continue;
-            }
-            let Ok(content) = std::fs::read_to_string(path) else {
-                continue; // non-UTF8 / unreadable
             };
             if content.trim().is_empty() {
                 continue;
@@ -195,5 +247,34 @@ mod tests {
     fn hash_changes_with_content() {
         assert_ne!(content_hash("a"), content_hash("b"));
         assert_eq!(content_hash("same"), content_hash("same"));
+    }
+
+    #[test]
+    fn scans_docx_documents_as_extracted_text() {
+        use std::io::Write as _;
+
+        let dir = std::env::temp_dir().join(format!("cbnb-scan-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("docs")).unwrap();
+
+        let file = std::fs::File::create(dir.join("docs/spec.docx")).unwrap();
+        let mut zip_writer = zip::ZipWriter::new(file);
+        zip_writer
+            .start_file("word/document.xml", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip_writer
+            .write_all(
+                br#"<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Payment spec body</w:t></w:r></w:p></w:body></w:document>"#,
+            )
+            .unwrap();
+        zip_writer.finish().unwrap();
+        // Office lock files must be ignored.
+        std::fs::write(dir.join("docs/~$spec.docx"), "lock").unwrap();
+
+        let files = FsSourceScanner.scan(dir.to_str().unwrap()).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].rel_path, "docs/spec.docx");
+        assert_eq!(files[0].language, "word");
+        assert!(files[0].content.contains("Payment spec body"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

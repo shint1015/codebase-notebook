@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Google Gemini provider adapter (Generative Language API).
 - Mistral and xAI (Grok) providers via the OpenAI-compatible adapter.
+- Multiple repositories per workspace; add local folders or clone directly
+  from a git URL (clones are app-managed and removed with the entry).
+- Workspace home view with repository management and a chat session list;
+  chats open in their own view with back navigation.
+- Document extraction for Word (.docx), Excel/OpenDocument (.xlsx/.xls/.ods)
+  and PDF files, plus CSV/TSV as plain text — all flowing through the same
+  chunking, secret-redaction and citation pipeline.
+
+### Changed
+
+- Chat sends with Ctrl+Enter / ⌘+Enter instead of plain Enter.
+- SQLite schema v2: repositories table; indexed document paths are prefixed
+  with their repository name (existing indexes are cleared — re-index once).
 
 ## [0.1.0] - 2026-07-08
 
