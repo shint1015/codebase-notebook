@@ -47,6 +47,13 @@ pub trait SourceScanner: Send + Sync {
     fn scan(&self, root_path: &str) -> DomainResult<Vec<SourceFile>>;
 }
 
+/// Clones remote git repositories into app-managed directories and removes
+/// them again. Implementation shells out to the user's git.
+pub trait RepoCloner: Send + Sync {
+    fn clone_repo(&self, url: &str, dest: &str) -> DomainResult<()>;
+    fn remove_clone(&self, path: &str) -> DomainResult<()>;
+}
+
 /// Resolves the concrete LLM adapter for a provider kind (model router).
 pub trait ProviderRouter: Send + Sync {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<std::sync::Arc<dyn LlmProvider>>;

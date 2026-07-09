@@ -6,7 +6,9 @@ use crate::application::chunking::chunk_text;
 use crate::domain::entities::chunk::Chunk;
 use crate::domain::entities::document::Document;
 use crate::domain::error::DomainResult;
-use crate::domain::repositories::{DocumentRepository, WorkspaceRepository};
+use crate::domain::repositories::{
+    DocumentRepository, RepositoryRepository, WorkspaceRepository,
+};
 use crate::domain::services::{EmbeddingProvider, SecretScanner, SourceScanner};
 
 const MAX_CHUNK_LINES: usize = 60;
@@ -26,6 +28,7 @@ pub struct IndexReport {
 
 pub struct IndexWorkspaceUseCase {
     workspaces: Arc<dyn WorkspaceRepository>,
+    repositories: Arc<dyn RepositoryRepository>,
     documents: Arc<dyn DocumentRepository>,
     scanner: Arc<dyn SourceScanner>,
     secret_scanner: Arc<dyn SecretScanner>,
@@ -35,6 +38,7 @@ pub struct IndexWorkspaceUseCase {
 impl IndexWorkspaceUseCase {
     pub fn new(
         workspaces: Arc<dyn WorkspaceRepository>,
+        repositories: Arc<dyn RepositoryRepository>,
         documents: Arc<dyn DocumentRepository>,
         scanner: Arc<dyn SourceScanner>,
         secret_scanner: Arc<dyn SecretScanner>,
@@ -42,6 +46,7 @@ impl IndexWorkspaceUseCase {
     ) -> Self {
         Self {
             workspaces,
+            repositories,
             documents,
             scanner,
             secret_scanner,
@@ -49,9 +54,12 @@ impl IndexWorkspaceUseCase {
         }
     }
 
+    /// Index every repository of the workspace. Document paths are stored as
+    /// "<repository name>/<path in repo>" so citations show their origin and
+    /// paths stay unique across repositories.
     pub async fn execute(&self, workspace_id: &str) -> DomainResult<IndexReport> {
-        let workspace = self.workspaces.find_by_id(workspace_id)?;
-        let files = self.scanner.scan(&workspace.root_path)?;
+        self.workspaces.find_by_id(workspace_id)?;
+        let repositories = self.repositories.list_by_workspace(workspace_id)?;
         let embedding_available = self.embedder.is_available().await;
 
         let mut report = IndexReport {
@@ -59,7 +67,28 @@ impl IndexWorkspaceUseCase {
             ..Default::default()
         };
 
+        for repository in &repositories {
+            let files = self.scanner.scan(&repository.root_path)?;
+            self.index_files(workspace_id, &repository.id, &repository.name, files, &mut report)
+                .await?;
+        }
+
+        Ok(report)
+    }
+
+    async fn index_files(
+        &self,
+        workspace_id: &str,
+        repository_id: &str,
+        repository_name: &str,
+        files: Vec<crate::domain::services::SourceFile>,
+        report: &mut IndexReport,
+    ) -> DomainResult<()> {
         for file in files {
+            let file = crate::domain::services::SourceFile {
+                rel_path: format!("{repository_name}/{}", file.rel_path),
+                ..file
+            };
             // Incremental: skip files whose content hash is unchanged. When a
             // file did change, keep its document id stable across re-indexing.
             let existing = self
@@ -86,6 +115,7 @@ impl IndexWorkspaceUseCase {
                     .map(|d| d.id)
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
                 workspace_id: workspace_id.to_string(),
+                repository_id: repository_id.to_string(),
                 rel_path: file.rel_path.clone(),
                 language: file.language.clone(),
                 content_hash: file.content_hash.clone(),
@@ -110,7 +140,7 @@ impl IndexWorkspaceUseCase {
             report.chunks_created += chunks.len();
             report.files_indexed += 1;
 
-            if embedding_available {
+            if report.embedding_available {
                 for batch in chunks.chunks(EMBED_BATCH) {
                     let texts: Vec<String> = batch
                         .iter()
@@ -131,6 +161,6 @@ impl IndexWorkspaceUseCase {
             }
         }
 
-        Ok(report)
+        Ok(())
     }
 }

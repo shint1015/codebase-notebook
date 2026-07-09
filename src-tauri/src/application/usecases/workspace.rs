@@ -13,20 +13,14 @@ impl WorkspaceUseCases {
         Self { repo }
     }
 
-    pub fn create(&self, name: &str, root_path: &str) -> DomainResult<Workspace> {
+    pub fn create(&self, name: &str) -> DomainResult<Workspace> {
         let name = name.trim();
         if name.is_empty() {
             return Err(DomainError::Validation("workspace name is empty".into()));
         }
-        if !std::path::Path::new(root_path).is_dir() {
-            return Err(DomainError::Validation(format!(
-                "not a directory: {root_path}"
-            )));
-        }
         let workspace = Workspace {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
-            root_path: root_path.to_string(),
             allow_external: false,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
