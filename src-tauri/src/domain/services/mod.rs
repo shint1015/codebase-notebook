@@ -64,6 +64,19 @@ pub trait SourceScanner: Send + Sync {
     fn scan(&self, root_path: &str) -> DomainResult<Vec<SourceFile>>;
 }
 
+/// Splits file content into retrievable chunks. Implementations may be
+/// syntax-aware (AST-based) per language, falling back to plain line
+/// windows.
+pub trait Chunker: Send + Sync {
+    fn chunk(&self, content: &str, language: &str) -> Vec<crate::domain::chunking::TextChunk>;
+}
+
+/// Key-value application settings (embedding model, rerank toggle, ...).
+pub trait SettingsRepository: Send + Sync {
+    fn get(&self, key: &str) -> DomainResult<Option<String>>;
+    fn set(&self, key: &str, value: &str) -> DomainResult<()>;
+}
+
 /// Clones remote git repositories into app-managed directories and removes
 /// them again. Implementation shells out to the user's git.
 pub trait RepoCloner: Send + Sync {

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProviderConfig, ProviderKind } from "../../domain/types";
 import { EXTERNAL_PROVIDERS, PROVIDER_LABELS } from "../../domain/types";
 import { isCommandError } from "../../domain/types";
+import { api } from "../../infrastructure/api";
 
 interface Props {
   providers: ProviderConfig[];
@@ -29,6 +30,63 @@ export function SettingsView({ providers, onConfigure, onTest, onClose }: Props)
         {providers.map((p) => (
           <ProviderCard key={p.kind} config={p} onConfigure={onConfigure} onTest={onTest} />
         ))}
+        <SearchSettingsCard />
+      </div>
+    </div>
+  );
+}
+
+function SearchSettingsCard() {
+  const [embeddingModel, setEmbeddingModel] = useState("");
+  const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.getSearchSettings().then((s) => {
+      setEmbeddingModel(s.embedding_model);
+      setRerankEnabled(s.rerank_enabled);
+    });
+  }, []);
+
+  const save = async () => {
+    setStatus(null);
+    try {
+      await api.setSearchSettings(embeddingModel, rerankEnabled);
+      setStatus("Saved. Re-index workspaces after changing the embedding model.");
+    } catch (e) {
+      setStatus(isCommandError(e) ? e.message : String(e));
+    }
+  };
+
+  return (
+    <div className="provider-card">
+      <div className="provider-title">
+        <strong>Search</strong>
+        <span className="badge local">local</span>
+      </div>
+      <div className="provider-grid">
+        <label>
+          Embedding model (Ollama)
+          <input
+            value={embeddingModel}
+            onChange={(e) => setEmbeddingModel(e.target.value)}
+            placeholder="nomic-embed-text / bge-m3"
+          />
+        </label>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={rerankEnabled}
+            onChange={(e) => setRerankEnabled(e.target.checked)}
+          />
+          Rerank results with the local LLM (slower, higher quality)
+        </label>
+      </div>
+      <div className="provider-actions">
+        <button className="primary" onClick={() => void save()}>
+          Save
+        </button>
+        {status && <span className="provider-status">{status}</span>}
       </div>
     </div>
   );

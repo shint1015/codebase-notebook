@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Syntax-aware chunking with tree-sitter for Rust, TypeScript, JavaScript,
+  Python and Go: chunks follow function/class boundaries instead of raw line
+  windows (other formats keep the line-based fallback).
+- Conversation-aware retrieval: follow-up questions are rewritten into
+  standalone search queries by the local model (never an external provider).
+- Optional local-LLM reranking of search results and a configurable Ollama
+  embedding model (e.g. bge-m3 for Japanese) in a new Search settings card.
+
 ## [0.3.0] - 2026-07-09
 
 ### Added

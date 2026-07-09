@@ -74,8 +74,25 @@ export const api = {
   revealSource: (workspaceId: string, relPath: string, line: number) =>
     invoke<void>("reveal_source", { workspaceId, relPath, line }),
 
-  prepareAsk: (workspaceId: string, question: string, provider: ProviderKind) =>
-    invoke<AskPreparation>("prepare_ask", { workspaceId, question, provider }),
+  prepareAsk: (
+    workspaceId: string,
+    question: string,
+    provider: ProviderKind,
+    sessionId: string | null,
+  ) =>
+    invoke<AskPreparation>("prepare_ask", {
+      workspaceId,
+      question,
+      provider,
+      sessionId,
+    }),
+
+  getSearchSettings: () =>
+    invoke<{ embedding_model: string; rerank_enabled: boolean }>(
+      "get_search_settings",
+    ),
+  setSearchSettings: (embeddingModel: string, rerankEnabled: boolean) =>
+    invoke<void>("set_search_settings", { embeddingModel, rerankEnabled }),
   ask: (
     sessionId: string,
     workspaceId: string,

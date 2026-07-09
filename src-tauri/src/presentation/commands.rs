@@ -333,9 +333,49 @@ pub async fn prepare_ask(
     workspace_id: String,
     question: String,
     provider: String,
+    session_id: Option<String>,
 ) -> CommandResult<AskPreparation> {
     let kind = parse_kind(&provider)?;
-    Ok(state.ask.prepare(&workspace_id, &question, kind).await?)
+    Ok(state
+        .ask
+        .prepare(&workspace_id, &question, kind, session_id.as_deref())
+        .await?)
+}
+
+// ---- search settings ----
+
+#[derive(Debug, Serialize)]
+pub struct SearchSettings {
+    pub embedding_model: String,
+    pub rerank_enabled: bool,
+}
+
+#[tauri::command]
+pub fn get_search_settings(state: State<'_, AppState>) -> CommandResult<SearchSettings> {
+    Ok(SearchSettings {
+        embedding_model: state
+            .settings
+            .get("embedding_model")?
+            .unwrap_or_else(|| super::state::EMBEDDING_MODEL.to_string()),
+        rerank_enabled: state
+            .settings
+            .get("rerank_enabled")?
+            .map(|v| v == "true")
+            .unwrap_or(false),
+    })
+}
+
+#[tauri::command]
+pub fn set_search_settings(
+    state: State<'_, AppState>,
+    embedding_model: String,
+    rerank_enabled: bool,
+) -> CommandResult<()> {
+    state.settings.set("embedding_model", embedding_model.trim())?;
+    state
+        .settings
+        .set("rerank_enabled", if rerank_enabled { "true" } else { "false" })?;
+    Ok(())
 }
 
 #[tauri::command]
