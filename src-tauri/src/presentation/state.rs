@@ -23,6 +23,7 @@ use crate::infrastructure::persistence::document_repo::SqliteDocumentRepository;
 use crate::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
 use crate::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
 use crate::infrastructure::persistence::settings_repo::SqliteSettingsRepository;
+use crate::infrastructure::persistence::usage_repo::SqliteUsageRepository;
 use crate::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::providers::ollama::OllamaEmbedding;
@@ -45,6 +46,7 @@ pub struct AppState {
     pub ask: AskUseCase,
     pub documents: Arc<dyn DocumentRepository>,
     pub settings: Arc<dyn crate::domain::services::SettingsRepository>,
+    pub usage: Arc<dyn crate::domain::repositories::UsageRepository>,
     repository_reader: Arc<dyn RepositoryRepository>,
 }
 
@@ -63,6 +65,8 @@ impl AppState {
         let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
         let settings_repo: Arc<dyn crate::domain::services::SettingsRepository> =
             Arc::new(SqliteSettingsRepository::new(db.clone()));
+        let usage_repo: Arc<dyn crate::domain::repositories::UsageRepository> =
+            Arc::new(SqliteUsageRepository::new(db.clone()));
         let provider_repo: Arc<SqliteProviderConfigRepository> =
             Arc::new(SqliteProviderConfigRepository::new(db));
 
@@ -129,12 +133,14 @@ impl AppState {
                 document_repo.clone(),
                 chat_repo,
                 provider_repo,
+                usage_repo.clone(),
                 router,
                 search.clone(),
             ),
             search,
             documents: document_repo,
             settings: settings_repo,
+            usage: usage_repo,
         })
     }
 

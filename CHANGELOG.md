@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Usage & audit log: every model call is recorded locally with provider,
+  model, estimated cost and the exact source files included in the prompt;
+  a settings card shows monthly totals and recent calls.
+- Monthly budgets per external provider — requests are blocked once the
+  month's estimated spend reaches the ceiling.
+- Ollama onboarding banner: detects a missing server or missing chat /
+  embedding models and pulls them from inside the app with live progress.
+
 ## [0.4.0] - 2026-07-09
 
 ### Added

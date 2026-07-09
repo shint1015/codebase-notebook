@@ -3,6 +3,7 @@ pub mod document_repo;
 pub mod provider_repo;
 pub mod repository_repo;
 pub mod settings_repo;
+pub mod usage_repo;
 pub mod workspace_repo;
 
 use std::path::Path;
@@ -199,6 +200,24 @@ const MIGRATIONS: &[&str] = &[
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+            "#,
+    // v5: usage/audit log for every model call, and per-provider monthly
+    // budgets for external APIs.
+    r#"
+            CREATE TABLE usage_log (
+                id               TEXT PRIMARY KEY,
+                created_at       TEXT NOT NULL,
+                provider         TEXT NOT NULL,
+                model            TEXT NOT NULL,
+                workspace_id     TEXT,
+                prompt_chars     INTEGER NOT NULL,
+                completion_chars INTEGER NOT NULL,
+                est_cost_usd     REAL NOT NULL,
+                sources_json     TEXT NOT NULL DEFAULT '[]'
+            );
+            CREATE INDEX idx_usage_created ON usage_log(created_at);
+
+            ALTER TABLE provider_configs ADD COLUMN monthly_budget_usd REAL;
             "#,
 ];
 
