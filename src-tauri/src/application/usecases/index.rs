@@ -85,10 +85,14 @@ impl IndexWorkspaceUseCase {
         report: &mut IndexReport,
     ) -> DomainResult<()> {
         for file in files {
-            let file = crate::domain::services::SourceFile {
-                rel_path: format!("{repository_name}/{}", file.rel_path),
-                ..file
+            // Single-file sources already carry the repository name as their
+            // path — avoid "notes.md/notes.md".
+            let rel_path = if file.rel_path == repository_name {
+                file.rel_path.clone()
+            } else {
+                format!("{repository_name}/{}", file.rel_path)
             };
+            let file = crate::domain::services::SourceFile { rel_path, ..file };
             // Incremental: skip files whose content hash is unchanged. When a
             // file did change, keep its document id stable across re-indexing.
             let existing = self
