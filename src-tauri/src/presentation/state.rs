@@ -89,7 +89,7 @@ impl AppState {
             ),
             index: IndexWorkspaceUseCase::new(
                 workspace_repo.clone(),
-                repository_repo,
+                repository_repo.clone(),
                 document_repo.clone(),
                 scanner,
                 secret_scanner,
@@ -97,6 +97,8 @@ impl AppState {
             ),
             ask: AskUseCase::new(
                 workspace_repo,
+                repository_repo.clone(),
+                document_repo.clone(),
                 chat_repo,
                 provider_repo,
                 router,

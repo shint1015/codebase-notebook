@@ -49,7 +49,7 @@ impl LlmProvider for CitingLlm {
     }
     async fn chat(&self, _model: &str, system: &str, _turns: &[ChatTurn]) -> DomainResult<String> {
         assert!(
-            system.contains("Answer ONLY from the numbered sources"),
+            system.contains("Answer ONLY from the workspace overview and the numbered sources"),
             "grounding instruction must be present"
         );
         Ok("The session token is validated in `validate_token` [1].".to_string())
@@ -143,7 +143,7 @@ async fn setup() -> Harness {
         chats: ChatUseCases::new(chat_repo.clone()),
         index: IndexWorkspaceUseCase::new(
             workspace_repo.clone(),
-            repository_repo,
+            repository_repo.clone(),
             document_repo.clone(),
             Arc::new(FsSourceScanner),
             Arc::new(RegexSecretScanner::new()),
@@ -151,6 +151,8 @@ async fn setup() -> Harness {
         ),
         ask: AskUseCase::new(
             workspace_repo,
+            repository_repo,
+            document_repo.clone(),
             chat_repo,
             provider_repo.clone(),
             Arc::new(FakeRouter),
@@ -266,6 +268,36 @@ async fn external_provider_requires_consent() {
         .await
         .unwrap();
     assert!(!preparation.requires_consent);
+}
+
+#[tokio::test]
+async fn asking_before_indexing_returns_guidance_error() {
+    let h = setup().await;
+    // Repository added but never indexed.
+    let session = h.chats.create_session(&h.workspace_id, "early").unwrap();
+
+    let prepared = h
+        .ask
+        .prepare(&h.workspace_id, "What is this?", ProviderKind::Ollama)
+        .await;
+    assert!(matches!(prepared, Err(DomainError::Validation(_))));
+
+    let asked = h
+        .ask
+        .execute(
+            &session.id,
+            &h.workspace_id,
+            "What is this?",
+            ProviderKind::Ollama,
+            false,
+        )
+        .await;
+    match asked {
+        Err(DomainError::Validation(message)) => {
+            assert!(message.contains("no indexed sources"));
+        }
+        other => panic!("expected validation error, got {other:?}"),
+    }
 }
 
 #[tokio::test]
