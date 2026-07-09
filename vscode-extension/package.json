@@ -1,0 +1,46 @@
+{
+  "name": "codebase-notebook-vscode",
+  "displayName": "Codebase Notebook",
+  "description": "Ask your local Codebase Notebook about the current selection or workspace — grounded, cited answers from your indexed sources.",
+  "version": "0.1.0",
+  "publisher": "spcsft",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codebaseNotebook.askSelection",
+        "title": "Codebase Notebook: Ask about selection"
+      },
+      {
+        "command": "codebaseNotebook.ask",
+        "title": "Codebase Notebook: Ask workspace"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codebaseNotebook.askSelection",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "~5.8.0"
+  }
+}

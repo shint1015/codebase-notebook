@@ -48,6 +48,12 @@ pub fn run() {
                 watcher.rebuild(targets).ok();
             }
             app.manage(WatcherHandle(watcher));
+
+            // Local HTTP API for editor integrations (localhost + token only).
+            match presentation::http_api::ensure_token(&data_dir) {
+                Ok(token) => presentation::http_api::start(app.handle().clone(), token),
+                Err(error) => eprintln!("local api: could not prepare token: {error}"),
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
