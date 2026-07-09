@@ -19,9 +19,8 @@ fn row_to_workspace(row: &rusqlite::Row<'_>) -> rusqlite::Result<Workspace> {
     Ok(Workspace {
         id: row.get(0)?,
         name: row.get(1)?,
-        root_path: row.get(2)?,
-        allow_external: row.get::<_, i64>(3)? != 0,
-        created_at: row.get(4)?,
+        allow_external: row.get::<_, i64>(2)? != 0,
+        created_at: row.get(3)?,
     })
 }
 
@@ -30,12 +29,11 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO workspaces (id, name, root_path, allow_external, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO workspaces (id, name, allow_external, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
                 params![
                     workspace.id,
                     workspace.name,
-                    workspace.root_path,
                     workspace.allow_external as i64,
                     workspace.created_at,
                 ],
@@ -48,7 +46,7 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT id, name, root_path, allow_external, created_at
+                "SELECT id, name, allow_external, created_at
                  FROM workspaces WHERE id = ?1",
                 params![id],
                 row_to_workspace,
@@ -65,7 +63,7 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, root_path, allow_external, created_at
+                "SELECT id, name, allow_external, created_at
                  FROM workspaces ORDER BY created_at DESC",
             )
             .map_err(storage_err("prepare list workspaces"))?;

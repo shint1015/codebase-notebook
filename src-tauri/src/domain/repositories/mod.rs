@@ -2,6 +2,7 @@ use crate::domain::entities::chat::{ChatSession, Message};
 use crate::domain::entities::chunk::{Chunk, SearchHit};
 use crate::domain::entities::document::Document;
 use crate::domain::entities::provider::{ProviderConfig, ProviderKind};
+use crate::domain::entities::repository::Repository;
 use crate::domain::entities::workspace::Workspace;
 use crate::domain::error::DomainResult;
 
@@ -13,11 +14,20 @@ pub trait WorkspaceRepository: Send + Sync {
     fn delete(&self, id: &str) -> DomainResult<()>;
 }
 
+pub trait RepositoryRepository: Send + Sync {
+    fn create(&self, repository: &Repository) -> DomainResult<()>;
+    fn find_by_id(&self, id: &str) -> DomainResult<Repository>;
+    fn list_by_workspace(&self, workspace_id: &str) -> DomainResult<Vec<Repository>>;
+    fn delete(&self, id: &str) -> DomainResult<()>;
+}
+
 pub trait DocumentRepository: Send + Sync {
     fn upsert_document(&self, document: &Document) -> DomainResult<()>;
     fn find_by_path(&self, workspace_id: &str, rel_path: &str) -> DomainResult<Option<Document>>;
     fn list_by_workspace(&self, workspace_id: &str) -> DomainResult<Vec<Document>>;
     fn count_by_workspace(&self, workspace_id: &str) -> DomainResult<i64>;
+    /// Remove all documents (and their chunks) belonging to a repository.
+    fn delete_by_repository(&self, repository_id: &str) -> DomainResult<()>;
     /// Replace all chunks of a document (used on re-index).
     fn replace_chunks(&self, document_id: &str, chunks: &[Chunk]) -> DomainResult<()>;
     fn store_embedding(&self, chunk_id: &str, embedding: &[f32]) -> DomainResult<()>;

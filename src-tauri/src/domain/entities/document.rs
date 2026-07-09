@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct Document {
     pub id: String,
     pub workspace_id: String,
-    /// Path relative to the workspace root.
+    pub repository_id: String,
+    /// Repository name + path relative to the repository root,
+    /// e.g. "backend/src/main.rs". Unique within a workspace.
     pub rel_path: String,
     pub language: String,
     /// Content hash used for incremental re-indexing.

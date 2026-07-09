@@ -1,6 +1,7 @@
 pub mod chat_repo;
 pub mod document_repo;
 pub mod provider_repo;
+pub mod repository_repo;
 pub mod workspace_repo;
 
 use std::path::Path;
@@ -155,6 +156,35 @@ const MIGRATIONS: &[&str] = &[
                 default_model   TEXT NOT NULL,
                 allow_send_code INTEGER NOT NULL
             );
+            "#,
+    // v2: workspaces hold multiple repositories. Existing workspaces get one
+    // repository row carrying their old root_path. Indexed data is wiped
+    // because document paths gained a repository-name prefix — users just
+    // re-index; chats and their citation snapshots are preserved.
+    r#"
+            CREATE TABLE repositories (
+                id           TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                name         TEXT NOT NULL,
+                root_path    TEXT NOT NULL,
+                remote_url   TEXT,
+                created_at   TEXT NOT NULL,
+                UNIQUE(workspace_id, name)
+            );
+
+            INSERT INTO repositories (id, workspace_id, name, root_path, remote_url, created_at)
+                SELECT lower(hex(randomblob(16))), id, name, root_path, NULL, created_at
+                FROM workspaces
+                WHERE root_path IS NOT NULL AND root_path != '';
+
+            ALTER TABLE documents ADD COLUMN repository_id TEXT
+                REFERENCES repositories(id) ON DELETE CASCADE;
+
+            DELETE FROM chunks_fts;
+            DELETE FROM chunks;
+            DELETE FROM documents;
+
+            ALTER TABLE workspaces DROP COLUMN root_path;
             "#,
 ];
 

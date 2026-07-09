@@ -20,10 +20,11 @@ fn row_to_document(row: &rusqlite::Row<'_>) -> rusqlite::Result<Document> {
     Ok(Document {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
-        rel_path: row.get(2)?,
-        language: row.get(3)?,
-        content_hash: row.get(4)?,
-        indexed_at: row.get(5)?,
+        repository_id: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        rel_path: row.get(3)?,
+        language: row.get(4)?,
+        content_hash: row.get(5)?,
+        indexed_at: row.get(6)?,
     })
 }
 
@@ -64,15 +65,17 @@ impl DocumentRepository for SqliteDocumentRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO documents (id, workspace_id, rel_path, language, content_hash, indexed_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO documents (id, workspace_id, repository_id, rel_path, language, content_hash, indexed_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(workspace_id, rel_path) DO UPDATE SET
+                   repository_id = excluded.repository_id,
                    language = excluded.language,
                    content_hash = excluded.content_hash,
                    indexed_at = excluded.indexed_at",
                 params![
                     document.id,
                     document.workspace_id,
+                    document.repository_id,
                     document.rel_path,
                     document.language,
                     document.content_hash,
@@ -87,7 +90,7 @@ impl DocumentRepository for SqliteDocumentRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT id, workspace_id, rel_path, language, content_hash, indexed_at
+                "SELECT id, workspace_id, repository_id, rel_path, language, content_hash, indexed_at
                  FROM documents WHERE workspace_id = ?1 AND rel_path = ?2",
                 params![workspace_id, rel_path],
                 row_to_document,
@@ -103,7 +106,7 @@ impl DocumentRepository for SqliteDocumentRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, workspace_id, rel_path, language, content_hash, indexed_at
+                "SELECT id, workspace_id, repository_id, rel_path, language, content_hash, indexed_at
                  FROM documents WHERE workspace_id = ?1 ORDER BY rel_path",
             )
             .map_err(storage_err("prepare list documents"))?;
@@ -123,6 +126,27 @@ impl DocumentRepository for SqliteDocumentRepository {
                 |row| row.get(0),
             )
             .map_err(storage_err("count documents"))
+    }
+
+    fn delete_by_repository(&self, repository_id: &str) -> DomainResult<()> {
+        let mut conn = self.db.lock();
+        let tx = conn
+            .transaction()
+            .map_err(storage_err("begin delete by repository"))?;
+        tx.execute(
+            "DELETE FROM chunks_fts WHERE chunk_id IN
+             (SELECT c.id FROM chunks c
+              JOIN documents d ON d.id = c.document_id
+              WHERE d.repository_id = ?1)",
+            params![repository_id],
+        )
+        .map_err(storage_err("delete repository fts"))?;
+        tx.execute(
+            "DELETE FROM documents WHERE repository_id = ?1",
+            params![repository_id],
+        )
+        .map_err(storage_err("delete repository documents"))?;
+        tx.commit().map_err(storage_err("commit delete by repository"))
     }
 
     fn replace_chunks(&self, document_id: &str, chunks: &[Chunk]) -> DomainResult<()> {
@@ -294,7 +318,8 @@ impl DocumentRepository for SqliteDocumentRepository {
 mod tests {
     use super::*;
     use crate::domain::entities::workspace::Workspace;
-    use crate::domain::repositories::WorkspaceRepository;
+    use crate::domain::repositories::{RepositoryRepository, WorkspaceRepository};
+    use crate::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
     use crate::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 
     fn setup() -> (SqliteWorkspaceRepository, SqliteDocumentRepository) {
@@ -309,15 +334,26 @@ mod tests {
         let ws = Workspace {
             id: "ws1".into(),
             name: "test".into(),
-            root_path: "/tmp".into(),
             allow_external: false,
             created_at: "2026-01-01T00:00:00Z".into(),
         };
         ws_repo.create(&ws).unwrap();
+        let repo = crate::domain::entities::repository::Repository {
+            id: "repo1".into(),
+            workspace_id: "ws1".into(),
+            name: "app".into(),
+            root_path: "/tmp".into(),
+            remote_url: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        };
+        SqliteRepositoryRepository::new(doc_repo.db.clone())
+            .create(&repo)
+            .unwrap();
         let doc = Document {
             id: "doc1".into(),
             workspace_id: "ws1".into(),
-            rel_path: "src/auth.rs".into(),
+            repository_id: "repo1".into(),
+            rel_path: "app/src/auth.rs".into(),
             language: "rust".into(),
             content_hash: "h1".into(),
             indexed_at: "2026-01-01T00:00:00Z".into(),
@@ -345,7 +381,7 @@ mod tests {
             .search_keyword(&ws_id, "how does authenticate work?", 10)
             .unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].rel_path, "src/auth.rs");
+        assert_eq!(hits[0].rel_path, "app/src/auth.rs");
         assert!(hits[0].score > 0.0);
     }
 
