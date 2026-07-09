@@ -10,11 +10,28 @@ pub struct ChatTurn {
     pub content: String,
 }
 
+/// Receives incremental answer fragments during generation.
+pub type TokenSink = dyn Fn(&str) + Send + Sync;
+
 /// An LLM chat backend. One implementation per provider (adapter pattern).
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     fn kind(&self) -> ProviderKind;
     async fn chat(&self, model: &str, system: &str, turns: &[ChatTurn]) -> DomainResult<String>;
+    /// Streaming variant: forwards fragments to `on_token` as they arrive and
+    /// returns the full text. Providers without streaming support fall back
+    /// to one final chunk.
+    async fn chat_stream(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        on_token: &TokenSink,
+    ) -> DomainResult<String> {
+        let text = self.chat(model, system, turns).await?;
+        on_token(&text);
+        Ok(text)
+    }
     /// Cheap connectivity / credential check.
     async fn test_connection(&self) -> DomainResult<String>;
 }

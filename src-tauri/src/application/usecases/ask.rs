@@ -12,7 +12,7 @@ use crate::domain::repositories::{
     ChatRepository, DocumentRepository, ProviderConfigRepository, RepositoryRepository,
     WorkspaceRepository,
 };
-use crate::domain::services::{ChatTurn, ProviderRouter};
+use crate::domain::services::{ChatTurn, ProviderRouter, TokenSink};
 
 const RETRIEVE_LIMIT: usize = 8;
 /// Recent turns replayed to the model for conversational context.
@@ -124,6 +124,28 @@ impl AskUseCase {
         provider: ProviderKind,
         consent_granted: bool,
     ) -> DomainResult<Message> {
+        self.execute_stream(
+            session_id,
+            workspace_id,
+            question,
+            provider,
+            consent_granted,
+            &|_| {},
+        )
+        .await
+    }
+
+    /// Streaming variant of [`execute`]: forwards answer fragments to
+    /// `on_token` while the model generates.
+    pub async fn execute_stream(
+        &self,
+        session_id: &str,
+        workspace_id: &str,
+        question: &str,
+        provider: ProviderKind,
+        consent_granted: bool,
+        on_token: &TokenSink,
+    ) -> DomainResult<Message> {
         let workspace = self.workspaces.find_by_id(workspace_id)?;
         self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
@@ -169,7 +191,9 @@ impl AskUseCase {
         });
 
         let llm = self.router.resolve(provider)?;
-        let answer = llm.chat(&config.default_model, &system, &turns).await?;
+        let answer = llm
+            .chat_stream(&config.default_model, &system, &turns, on_token)
+            .await?;
         let citations = extract_citations(&answer, &hits);
 
         let assistant_message = Message {

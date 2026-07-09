@@ -1,5 +1,5 @@
 // Thin adapter over Tauri invoke — the only file that knows about IPC.
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AskPreparation,
   ChatSession,
@@ -71,12 +71,17 @@ export const api = {
     question: string,
     provider: ProviderKind,
     consentGranted: boolean,
-  ) =>
-    invoke<Message>("ask", {
+    onToken?: (token: string) => void,
+  ) => {
+    const channel = new Channel<string>();
+    channel.onmessage = (token) => onToken?.(token);
+    return invoke<Message>("ask", {
       sessionId,
       workspaceId,
       question,
       provider,
       consentGranted,
-    }),
+      onToken: channel,
+    });
+  },
 };
