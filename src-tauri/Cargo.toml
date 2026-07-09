@@ -1,6 +1,6 @@
 [package]
 name = "codebase-notebook"
-version = "0.2.0"
+version = "0.3.0-dev.0"
 description = "Local-first, source-grounded knowledge notebook for engineers"
 authors = ["spcsft"]
 edition = "2021"
@@ -23,9 +23,11 @@ async-trait = "0.1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+futures-util = "0.3"
 walkdir = "2"
 regex = "1"
+notify = "7"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 tokio = { version = "1", features = ["sync"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

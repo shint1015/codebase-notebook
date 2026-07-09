@@ -43,9 +43,54 @@ body {
   overflow-y: auto;
 }
 
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .sidebar-header h1 {
   font-size: 17px;
   margin: 0;
+}
+
+/* --- collapsed rail --- */
+
+.sidebar.collapsed {
+  width: 52px;
+  min-width: 52px;
+  align-items: center;
+  padding: 12px 8px;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.rail-workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.rail-item.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.rail-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .tagline {
@@ -65,19 +110,186 @@ body {
 }
 
 .workspace-list li {
-  padding: 10px;
   border-radius: 8px;
   border: 1px solid transparent;
-  cursor: pointer;
 }
 
-.workspace-list li:hover {
+.workspace-list li .workspace-row {
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.workspace-list li .workspace-row:hover {
   background: var(--bg-raised);
 }
 
 .workspace-list li.selected {
   background: var(--bg-raised);
   border-color: var(--accent-dim);
+}
+
+/* --- chat sessions under the selected workspace --- */
+
+.session-nav {
+  padding: 0 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-nav .new-chat {
+  width: 100%;
+  text-align: left;
+}
+
+.session-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.session-nav ul li {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: none;
+}
+
+.session-nav ul li:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.session-nav ul li.active {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.session-nav ul li.empty {
+  cursor: default;
+}
+
+.session-nav ul li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.session-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.session-actions {
+  display: none;
+  gap: 2px;
+}
+
+.session-nav ul li:hover .session-actions {
+  display: inline-flex;
+}
+
+.session-actions button {
+  padding: 0 5px;
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.session-actions button:hover {
+  color: var(--text);
+}
+
+.session-nav ul li input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* markdown answers */
+
+.markdown p:first-child {
+  margin-top: 0;
+}
+
+.markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.markdown code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.92em;
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+.markdown a {
+  color: var(--accent);
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 20px;
+}
+
+.citation-source {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.citation-open {
+  font-size: 10px;
+  padding: 1px 8px;
 }
 
 .workspace-list li.empty {
@@ -243,6 +455,15 @@ textarea:focus {
   width: 280px;
 }
 
+.repo-add.remote-row {
+  width: 100%;
+}
+
+.repo-add.remote-row input {
+  flex: 1;
+  width: auto;
+}
+
 .repo-list,
 .session-list {
   list-style: none;
@@ -275,6 +496,13 @@ textarea:focus {
   font-size: 12px;
   border: none;
   cursor: default;
+}
+
+.repo-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .index-row {
@@ -332,6 +560,54 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.provider-select {
+  max-width: 220px;
+}
+
+.home-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* ---------- publish panel ---------- */
+
+.publish-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.publish-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.publish-card h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.publish-card textarea {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.publish-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.publish-actions a {
+  color: var(--accent);
 }
 
 /* ---------- chat ---------- */
@@ -461,6 +737,18 @@ textarea:focus {
 .thinking {
   color: var(--text-dim);
   font-style: italic;
+}
+
+.message.streaming .message-content::after {
+  content: "▍";
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .error {

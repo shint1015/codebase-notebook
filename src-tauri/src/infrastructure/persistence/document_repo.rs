@@ -344,6 +344,7 @@ mod tests {
             name: "app".into(),
             root_path: "/tmp".into(),
             remote_url: None,
+            source_kind: crate::domain::entities::repository::SourceKind::Local,
             created_at: "2026-01-01T00:00:00Z".into(),
         };
         SqliteRepositoryRepository::new(doc_repo.db.clone())

@@ -16,6 +16,7 @@ impl SqliteRepositoryRepository {
 }
 
 fn row_to_repository(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repository> {
+    let kind_str: String = row.get(6)?;
     Ok(Repository {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
@@ -23,6 +24,7 @@ fn row_to_repository(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repository> {
         root_path: row.get(3)?,
         remote_url: row.get(4)?,
         created_at: row.get(5)?,
+        source_kind: crate::domain::entities::repository::SourceKind::parse(&kind_str),
     })
 }
 
@@ -31,8 +33,8 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO repositories (id, workspace_id, name, root_path, remote_url, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO repositories (id, workspace_id, name, root_path, remote_url, created_at, source_kind)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     repository.id,
                     repository.workspace_id,
@@ -40,6 +42,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
                     repository.root_path,
                     repository.remote_url,
                     repository.created_at,
+                    repository.source_kind.as_str(),
                 ],
             )
             .map_err(|e| match e {
@@ -60,7 +63,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT id, workspace_id, name, root_path, remote_url, created_at
+                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind
                  FROM repositories WHERE id = ?1",
                 params![id],
                 row_to_repository,
@@ -77,7 +80,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, workspace_id, name, root_path, remote_url, created_at
+                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind
                  FROM repositories WHERE workspace_id = ?1 ORDER BY created_at",
             )
             .map_err(storage_err("prepare list repositories"))?;

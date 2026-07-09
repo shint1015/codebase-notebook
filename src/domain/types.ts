@@ -7,12 +7,15 @@ export interface Workspace {
   created_at: string;
 }
 
+export type SourceKind = "local" | "git" | "github_issues";
+
 export interface Repository {
   id: string;
   workspace_id: string;
   name: string;
   root_path: string;
   remote_url: string | null;
+  source_kind: SourceKind;
   created_at: string;
 }
 

@@ -1,5 +1,5 @@
 // Thin adapter over Tauri invoke — the only file that knows about IPC.
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   AskPreparation,
   ChatSession,
@@ -26,8 +26,18 @@ export const api = {
     invoke<Repository>("add_local_repository", { workspaceId, rootPath }),
   addGitRepository: (workspaceId: string, url: string) =>
     invoke<Repository>("add_git_repository", { workspaceId, url }),
+  addGithubIssuesRepository: (workspaceId: string, spec: string) =>
+    invoke<Repository>("add_github_issues_repository", { workspaceId, spec }),
   deleteRepository: (repositoryId: string) =>
     invoke<void>("delete_repository", { repositoryId }),
+  syncRepository: (repositoryId: string) =>
+    invoke<Repository>("sync_repository", { repositoryId }),
+  rebuildWatchers: () => invoke<void>("rebuild_watchers"),
+
+  createGithubIssue: (spec: string, title: string, body: string) =>
+    invoke<string>("create_github_issue", { spec, title, body }),
+  writeWikiPage: (repositoryId: string, title: string, content: string) =>
+    invoke<string>("write_wiki_page", { repositoryId, title, content }),
   setWorkspaceAllowExternal: (workspaceId: string, allow: boolean) =>
     invoke<void>("set_workspace_allow_external", { workspaceId, allow }),
   workspaceStats: (workspaceId: string) =>
@@ -55,6 +65,14 @@ export const api = {
     invoke<ChatSession[]>("list_chat_sessions", { workspaceId }),
   listChatMessages: (sessionId: string) =>
     invoke<Message[]>("list_chat_messages", { sessionId }),
+  renameChatSession: (sessionId: string, title: string) =>
+    invoke<void>("rename_chat_session", { sessionId, title }),
+  deleteChatSession: (sessionId: string) =>
+    invoke<void>("delete_chat_session", { sessionId }),
+  exportChat: (sessionId: string, destPath: string) =>
+    invoke<void>("export_chat", { sessionId, destPath }),
+  revealSource: (workspaceId: string, relPath: string, line: number) =>
+    invoke<void>("reveal_source", { workspaceId, relPath, line }),
 
   prepareAsk: (workspaceId: string, question: string, provider: ProviderKind) =>
     invoke<AskPreparation>("prepare_ask", { workspaceId, question, provider }),
@@ -64,12 +82,17 @@ export const api = {
     question: string,
     provider: ProviderKind,
     consentGranted: boolean,
-  ) =>
-    invoke<Message>("ask", {
+    onToken?: (token: string) => void,
+  ) => {
+    const channel = new Channel<string>();
+    channel.onmessage = (token) => onToken?.(token);
+    return invoke<Message>("ask", {
       sessionId,
       workspaceId,
       question,
       provider,
       consentGranted,
-    }),
+      onToken: channel,
+    });
+  },
 };

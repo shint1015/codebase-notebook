@@ -10,11 +10,28 @@ pub struct ChatTurn {
     pub content: String,
 }
 
+/// Receives incremental answer fragments during generation.
+pub type TokenSink = dyn Fn(&str) + Send + Sync;
+
 /// An LLM chat backend. One implementation per provider (adapter pattern).
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     fn kind(&self) -> ProviderKind;
     async fn chat(&self, model: &str, system: &str, turns: &[ChatTurn]) -> DomainResult<String>;
+    /// Streaming variant: forwards fragments to `on_token` as they arrive and
+    /// returns the full text. Providers without streaming support fall back
+    /// to one final chunk.
+    async fn chat_stream(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        on_token: &TokenSink,
+    ) -> DomainResult<String> {
+        let text = self.chat(model, system, turns).await?;
+        on_token(&text);
+        Ok(text)
+    }
     /// Cheap connectivity / credential check.
     async fn test_connection(&self) -> DomainResult<String>;
 }
@@ -52,6 +69,41 @@ pub trait SourceScanner: Send + Sync {
 pub trait RepoCloner: Send + Sync {
     fn clone_repo(&self, url: &str, dest: &str) -> DomainResult<()>;
     fn remove_clone(&self, path: &str) -> DomainResult<()>;
+}
+
+/// One issue fetched from a tracker, ready to be materialized as markdown.
+#[derive(Debug, Clone)]
+pub struct IssueDoc {
+    pub number: i64,
+    pub title: String,
+    pub state: String,
+    pub author: String,
+    pub labels: Vec<String>,
+    pub body: String,
+    pub url: String,
+    pub created_at: String,
+}
+
+/// Fetches issues from a remote tracker (e.g. GitHub) so they can be indexed
+/// locally. Network access happens only on the explicit "fetch" action.
+#[async_trait]
+pub trait IssueFetcher: Send + Sync {
+    /// `spec` is "owner/repo".
+    async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>>;
+}
+
+/// Creates issues on a remote tracker using the user's own credentials.
+/// Only invoked by an explicit user action.
+#[async_trait]
+pub trait IssuePublisher: Send + Sync {
+    /// Returns the URL of the created issue.
+    async fn create_issue(&self, spec: &str, title: &str, body: &str) -> DomainResult<String>;
+}
+
+/// Git working-tree synchronization for app-managed clones (wiki publishing).
+pub trait GitSync: Send + Sync {
+    fn pull(&self, repo_path: &str) -> DomainResult<()>;
+    fn commit_and_push(&self, repo_path: &str, message: &str) -> DomainResult<()>;
 }
 
 /// Resolves the concrete LLM adapter for a provider kind (model router).

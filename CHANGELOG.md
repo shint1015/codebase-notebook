@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Streaming chat: answers render token-by-token from all providers that
+  support it (Ollama, OpenAI-compatible, Anthropic).
+- Assistant answers render as markdown (GFM) with styled code blocks.
+- Session management: rename and delete chats from the sidebar; export a
+  chat as a markdown transcript.
+- Citations can be opened in the editor (VS Code `code -g`, falling back to
+  the OS file manager) at the cited line.
+- Sync button on managed sources: `git pull` for clones, re-fetch for GitHub
+  issues, followed by re-indexing.
+- Local sources are watched for file changes and re-indexed automatically
+  after a quiet period.
+- Publish panel: create GitHub issues (via the authenticated `gh` CLI) and
+  write wiki pages (committed and pushed to the cloned wiki, then re-indexed).
+- Single files can be added as sources, not only folders.
+- GitHub issues can be fetched (via the authenticated `gh` CLI, or the public
+  REST API) and indexed as markdown documents; GitHub wikis work through the
+  existing git clone (`….wiki.git`).
+- Asking in a workspace with no indexed sources now returns a clear
+  "run indexing first" error instead of a model refusal.
+- The system prompt includes a workspace overview (repository list), so
+  meta questions like "which repositories are in this workspace?" are
+  answerable.
+
+### Changed
+
+- Sidebar now shows the selected workspace's chat list (with "+ New chat")
+  and can be collapsed to an icon rail; the model provider selector moved to
+  the top-right of the chat view.
+
 ## [0.2.0] - 2026-07-09
 
 ### Added

@@ -5,6 +5,7 @@ use crate::application::usecases::ask::AskUseCase;
 use crate::application::usecases::chat::ChatUseCases;
 use crate::application::usecases::index::IndexWorkspaceUseCase;
 use crate::application::usecases::provider::ProviderUseCases;
+use crate::application::usecases::publish::PublishUseCases;
 use crate::application::usecases::repository::RepositoryUseCases;
 use crate::application::usecases::search::SearchUseCase;
 use crate::application::usecases::workspace::WorkspaceUseCases;
@@ -14,6 +15,7 @@ use crate::domain::repositories::{
     DocumentRepository, ProviderConfigRepository, RepositoryRepository,
 };
 use crate::infrastructure::indexing::git::GitCliCloner;
+use crate::infrastructure::indexing::github_issues::GitHubIssueFetcher;
 use crate::infrastructure::indexing::scanner::FsSourceScanner;
 use crate::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use crate::infrastructure::persistence::document_repo::SqliteDocumentRepository;
@@ -33,13 +35,18 @@ const EMBEDDING_MODEL: &str = "nomic-embed-text";
 pub struct AppState {
     pub workspaces: WorkspaceUseCases,
     pub repositories: RepositoryUseCases,
+    pub publish: PublishUseCases,
     pub chats: ChatUseCases,
     pub providers: ProviderUseCases,
     pub index: IndexWorkspaceUseCase,
     pub search: Arc<SearchUseCase>,
     pub ask: AskUseCase,
     pub documents: Arc<dyn DocumentRepository>,
+    repository_reader: Arc<dyn RepositoryRepository>,
 }
+
+/// Managed handle for the filesystem watcher (armed in the app setup hook).
+pub struct WatcherHandle(pub Arc<crate::infrastructure::indexing::watch::SourceWatcher>);
 
 impl AppState {
     pub fn new(db_path: &Path, clones_dir: PathBuf) -> DomainResult<Self> {
@@ -58,6 +65,7 @@ impl AppState {
         let secret_scanner = Arc::new(RegexSecretScanner::new());
         let scanner = Arc::new(FsSourceScanner);
         let cloner = Arc::new(GitCliCloner);
+        let issue_service = Arc::new(GitHubIssueFetcher);
 
         let ollama_base_url = provider_repo
             .find(ProviderKind::Ollama)?
@@ -78,9 +86,13 @@ impl AppState {
                 workspace_repo.clone(),
                 repository_repo.clone(),
                 document_repo.clone(),
-                cloner,
+                cloner.clone(),
+                cloner.clone(),
+                issue_service.clone(),
                 clones_dir,
             ),
+            publish: PublishUseCases::new(repository_repo.clone(), issue_service, cloner),
+            repository_reader: repository_repo.clone(),
             chats: ChatUseCases::new(chat_repo.clone()),
             providers: ProviderUseCases::new(
                 provider_repo.clone(),
@@ -89,7 +101,7 @@ impl AppState {
             ),
             index: IndexWorkspaceUseCase::new(
                 workspace_repo.clone(),
-                repository_repo,
+                repository_repo.clone(),
                 document_repo.clone(),
                 scanner,
                 secret_scanner,
@@ -97,6 +109,8 @@ impl AppState {
             ),
             ask: AskUseCase::new(
                 workspace_repo,
+                repository_repo.clone(),
+                document_repo.clone(),
                 chat_repo,
                 provider_repo,
                 router,
@@ -105,5 +119,21 @@ impl AppState {
             search,
             documents: document_repo,
         })
+    }
+
+    /// Local sources to watch: (root path, workspace id). Managed clones and
+    /// issue sets only change through explicit app actions, which re-index
+    /// themselves.
+    pub fn watch_targets(&self) -> DomainResult<Vec<(String, String)>> {
+        use crate::domain::entities::repository::SourceKind;
+        let mut targets = Vec::new();
+        for workspace in self.workspaces.list()? {
+            for repository in self.repository_reader.list_by_workspace(&workspace.id)? {
+                if repository.source_kind == SourceKind::Local {
+                    targets.push((repository.root_path, workspace.id.clone()));
+                }
+            }
+        }
+        Ok(targets)
     }
 }

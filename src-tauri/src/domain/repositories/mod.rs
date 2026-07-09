@@ -51,6 +51,8 @@ pub trait DocumentRepository: Send + Sync {
 pub trait ChatRepository: Send + Sync {
     fn create_session(&self, session: &ChatSession) -> DomainResult<()>;
     fn list_sessions(&self, workspace_id: &str) -> DomainResult<Vec<ChatSession>>;
+    fn rename_session(&self, session_id: &str, title: &str) -> DomainResult<()>;
+    fn delete_session(&self, session_id: &str) -> DomainResult<()>;
     fn append_message(&self, message: &Message) -> DomainResult<()>;
     fn list_messages(&self, session_id: &str) -> DomainResult<Vec<Message>>;
 }

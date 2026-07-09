@@ -7,10 +7,12 @@ use crate::domain::entities::chat::{Citation, Message, Role};
 use crate::domain::entities::chunk::SearchHit;
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::entities::repository::Repository;
 use crate::domain::repositories::{
-    ChatRepository, ProviderConfigRepository, WorkspaceRepository,
+    ChatRepository, DocumentRepository, ProviderConfigRepository, RepositoryRepository,
+    WorkspaceRepository,
 };
-use crate::domain::services::{ChatTurn, ProviderRouter};
+use crate::domain::services::{ChatTurn, ProviderRouter, TokenSink};
 
 const RETRIEVE_LIMIT: usize = 8;
 /// Recent turns replayed to the model for conversational context.
@@ -37,6 +39,8 @@ pub struct SourcePreview {
 
 pub struct AskUseCase {
     workspaces: Arc<dyn WorkspaceRepository>,
+    repositories: Arc<dyn RepositoryRepository>,
+    documents: Arc<dyn DocumentRepository>,
     chats: Arc<dyn ChatRepository>,
     providers: Arc<dyn ProviderConfigRepository>,
     router: Arc<dyn ProviderRouter>,
@@ -46,6 +50,8 @@ pub struct AskUseCase {
 impl AskUseCase {
     pub fn new(
         workspaces: Arc<dyn WorkspaceRepository>,
+        repositories: Arc<dyn RepositoryRepository>,
+        documents: Arc<dyn DocumentRepository>,
         chats: Arc<dyn ChatRepository>,
         providers: Arc<dyn ProviderConfigRepository>,
         router: Arc<dyn ProviderRouter>,
@@ -53,11 +59,27 @@ impl AskUseCase {
     ) -> Self {
         Self {
             workspaces,
+            repositories,
+            documents,
             chats,
             providers,
             router,
             search,
         }
+    }
+
+    /// A question can only be grounded if something is indexed. Guides the
+    /// user to run indexing instead of letting the model answer "the sources
+    /// do not cover this" for every question.
+    fn ensure_indexed(&self, workspace_id: &str) -> DomainResult<()> {
+        if self.documents.count_chunks(workspace_id)? == 0 {
+            return Err(DomainError::Validation(
+                "this workspace has no indexed sources yet — add a repository and run \
+                 \"Index all repositories\" first"
+                    .into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Dry-run: retrieve sources and report whether user consent is needed
@@ -69,6 +91,7 @@ impl AskUseCase {
         provider: ProviderKind,
     ) -> DomainResult<AskPreparation> {
         let workspace = self.workspaces.find_by_id(workspace_id)?;
+        self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
         let hits = self
             .search
@@ -101,7 +124,30 @@ impl AskUseCase {
         provider: ProviderKind,
         consent_granted: bool,
     ) -> DomainResult<Message> {
+        self.execute_stream(
+            session_id,
+            workspace_id,
+            question,
+            provider,
+            consent_granted,
+            &|_| {},
+        )
+        .await
+    }
+
+    /// Streaming variant of [`execute`]: forwards answer fragments to
+    /// `on_token` while the model generates.
+    pub async fn execute_stream(
+        &self,
+        session_id: &str,
+        workspace_id: &str,
+        question: &str,
+        provider: ProviderKind,
+        consent_granted: bool,
+        on_token: &TokenSink,
+    ) -> DomainResult<Message> {
         let workspace = self.workspaces.find_by_id(workspace_id)?;
+        self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
 
         // Safety gate: nothing leaves the machine without explicit consent.
@@ -136,7 +182,8 @@ impl AskUseCase {
         };
         self.chats.append_message(&user_message)?;
 
-        let system = build_system_prompt(&hits);
+        let repositories = self.repositories.list_by_workspace(workspace_id)?;
+        let system = build_system_prompt(&workspace.name, &repositories, &hits);
         let mut turns = history;
         turns.push(ChatTurn {
             role: "user".to_string(),
@@ -144,7 +191,9 @@ impl AskUseCase {
         });
 
         let llm = self.router.resolve(provider)?;
-        let answer = llm.chat(&config.default_model, &system, &turns).await?;
+        let answer = llm
+            .chat_stream(&config.default_model, &system, &turns, on_token)
+            .await?;
         let citations = extract_citations(&answer, &hits);
 
         let assistant_message = Message {
@@ -202,21 +251,36 @@ impl AskUseCase {
     }
 }
 
-/// Source-grounded system prompt: numbered sources, mandatory citations, and
-/// an explicit instruction not to answer beyond the sources (NotebookLM-style).
-fn build_system_prompt(hits: &[SearchHit]) -> String {
+/// Source-grounded system prompt: workspace overview, numbered sources,
+/// mandatory citations, and an explicit instruction not to answer beyond the
+/// sources (NotebookLM-style).
+fn build_system_prompt(
+    workspace_name: &str,
+    repositories: &[Repository],
+    hits: &[SearchHit],
+) -> String {
     let mut prompt = String::from(
         "You are Codebase Notebook, an engineering assistant grounded in the user's \
          indexed sources.\n\
          Rules:\n\
-         1. Answer ONLY from the numbered sources below. Never invent facts, APIs or code \
-         that are not in the sources.\n\
+         1. Answer ONLY from the workspace overview and the numbered sources below. Never \
+         invent facts, APIs or code that are not in them.\n\
          2. Cite sources inline with their bracket number, e.g. [1] or [2][3], every time \
          you rely on one.\n\
          3. If the sources do not contain the answer, say clearly that the indexed sources \
          do not cover it — do not guess.\n\
          4. Answer in the same language as the user's question.\n\n",
     );
+    // Overview lets the model answer meta questions ("what repositories are
+    // in this workspace?") that chunk retrieval alone cannot ground.
+    prompt.push_str(&format!("Workspace: {workspace_name}\nRepositories:\n"));
+    for repository in repositories {
+        match &repository.remote_url {
+            Some(url) => prompt.push_str(&format!("- {} (cloned from {url})\n", repository.name)),
+            None => prompt.push_str(&format!("- {} (local folder)\n", repository.name)),
+        }
+    }
+    prompt.push('\n');
     if hits.is_empty() {
         prompt.push_str("No sources were retrieved for this question.\n");
         return prompt;
@@ -311,9 +375,20 @@ mod tests {
     }
 
     #[test]
-    fn system_prompt_numbers_sources() {
+    fn system_prompt_numbers_sources_and_lists_repositories() {
         let hits = vec![hit("a", "src/a.rs")];
-        let prompt = build_system_prompt(&hits);
+        let repositories = vec![Repository {
+            id: "r1".into(),
+            workspace_id: "w".into(),
+            name: "backend".into(),
+            root_path: "/tmp/backend".into(),
+            remote_url: Some("https://github.com/org/backend.git".into()),
+            source_kind: crate::domain::entities::repository::SourceKind::Git,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }];
+        let prompt = build_system_prompt("demo", &repositories, &hits);
+        assert!(prompt.contains("Workspace: demo"));
+        assert!(prompt.contains("- backend (cloned from https://github.com/org/backend.git)"));
         assert!(prompt.contains("[1] src/a.rs"));
         assert!(prompt.contains("fn main() {}"));
     }

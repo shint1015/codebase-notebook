@@ -15,7 +15,7 @@ use codebase_notebook_lib::domain::entities::provider::{ProviderConfig, Provider
 use codebase_notebook_lib::domain::error::{DomainError, DomainResult};
 use codebase_notebook_lib::domain::repositories::ProviderConfigRepository;
 use codebase_notebook_lib::domain::services::{
-    ChatTurn, EmbeddingProvider, LlmProvider, ProviderRouter,
+    ChatTurn, EmbeddingProvider, IssueDoc, IssueFetcher, LlmProvider, ProviderRouter,
 };
 use codebase_notebook_lib::infrastructure::indexing::git::GitCliCloner;
 use codebase_notebook_lib::infrastructure::indexing::scanner::FsSourceScanner;
@@ -49,7 +49,7 @@ impl LlmProvider for CitingLlm {
     }
     async fn chat(&self, _model: &str, system: &str, _turns: &[ChatTurn]) -> DomainResult<String> {
         assert!(
-            system.contains("Answer ONLY from the numbered sources"),
+            system.contains("Answer ONLY from the workspace overview and the numbered sources"),
             "grounding instruction must be present"
         );
         Ok("The session token is validated in `validate_token` [1].".to_string())
@@ -64,6 +64,37 @@ struct FakeRouter;
 impl ProviderRouter for FakeRouter {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<Arc<dyn LlmProvider>> {
         Ok(Arc::new(CitingLlm(kind)))
+    }
+}
+
+/// Two fake issues, no network.
+struct FakeIssueFetcher;
+
+#[async_trait]
+impl IssueFetcher for FakeIssueFetcher {
+    async fn fetch_issues(&self, spec: &str) -> DomainResult<Vec<IssueDoc>> {
+        Ok(vec![
+            IssueDoc {
+                number: 1,
+                title: "Crash on startup".into(),
+                state: "open".into(),
+                author: "alice".into(),
+                labels: vec!["bug".into()],
+                body: format!("The app from {spec} crashes when the config is missing."),
+                url: format!("https://github.com/{spec}/issues/1"),
+                created_at: "2026-01-01T00:00:00Z".into(),
+            },
+            IssueDoc {
+                number: 2,
+                title: "Add dark mode".into(),
+                state: "closed".into(),
+                author: "bob".into(),
+                labels: vec![],
+                body: "Please support a dark theme.".into(),
+                url: format!("https://github.com/{spec}/issues/2"),
+                created_at: "2026-01-02T00:00:00Z".into(),
+            },
+        ])
     }
 }
 
@@ -130,6 +161,8 @@ async fn setup() -> Harness {
         repository_repo.clone(),
         document_repo.clone(),
         Arc::new(GitCliCloner),
+        Arc::new(GitCliCloner),
+        Arc::new(FakeIssueFetcher),
         tmp.path().join("clones"),
     );
     repositories
@@ -143,7 +176,7 @@ async fn setup() -> Harness {
         chats: ChatUseCases::new(chat_repo.clone()),
         index: IndexWorkspaceUseCase::new(
             workspace_repo.clone(),
-            repository_repo,
+            repository_repo.clone(),
             document_repo.clone(),
             Arc::new(FsSourceScanner),
             Arc::new(RegexSecretScanner::new()),
@@ -151,6 +184,8 @@ async fn setup() -> Harness {
         ),
         ask: AskUseCase::new(
             workspace_repo,
+            repository_repo,
+            document_repo.clone(),
             chat_repo,
             provider_repo.clone(),
             Arc::new(FakeRouter),
@@ -269,6 +304,36 @@ async fn external_provider_requires_consent() {
 }
 
 #[tokio::test]
+async fn asking_before_indexing_returns_guidance_error() {
+    let h = setup().await;
+    // Repository added but never indexed.
+    let session = h.chats.create_session(&h.workspace_id, "early").unwrap();
+
+    let prepared = h
+        .ask
+        .prepare(&h.workspace_id, "What is this?", ProviderKind::Ollama)
+        .await;
+    assert!(matches!(prepared, Err(DomainError::Validation(_))));
+
+    let asked = h
+        .ask
+        .execute(
+            &session.id,
+            &h.workspace_id,
+            "What is this?",
+            ProviderKind::Ollama,
+            false,
+        )
+        .await;
+    match asked {
+        Err(DomainError::Validation(message)) => {
+            assert!(message.contains("no indexed sources"));
+        }
+        other => panic!("expected validation error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn multiple_repositories_index_and_remove_independently() {
     let h = setup().await;
 
@@ -316,6 +381,62 @@ async fn multiple_repositories_index_and_remove_independently() {
         .await
         .unwrap();
     assert!(!still.is_empty());
+}
+
+#[tokio::test]
+async fn single_file_and_github_issues_sources() {
+    let h = setup().await;
+
+    // Single file as a source.
+    let notes = h._tmp.path().join("meeting-notes.md");
+    std::fs::write(&notes, "# Meeting\n\nDecided to migrate the queue to NATS.").unwrap();
+    let file_repo = h
+        .repositories
+        .add_local(&h.workspace_id, notes.to_str().unwrap())
+        .unwrap();
+    assert_eq!(file_repo.name, "meeting-notes.md");
+
+    // GitHub issues (via fake fetcher) materialized as markdown.
+    let issues_repo = h
+        .repositories
+        .add_github_issues(&h.workspace_id, "https://github.com/acme/app/issues")
+        .await
+        .unwrap();
+    assert_eq!(issues_repo.name, "app-issues");
+    assert!(issues_repo.remote_url.as_deref() == Some("https://github.com/acme/app/issues"));
+
+    let report = h.index.execute(&h.workspace_id).await.unwrap();
+    // 2 code files + 1 note file + 2 issue files
+    assert_eq!(report.files_indexed, 5);
+
+    // Both new sources are searchable with their repo-name prefixes.
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "migrate queue NATS", 10)
+        .await
+        .unwrap();
+    assert!(hits.iter().any(|hit| hit.rel_path == "meeting-notes.md"));
+
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "crash startup config missing", 10)
+        .await
+        .unwrap();
+    assert!(hits
+        .iter()
+        .any(|hit| hit.rel_path == "app-issues/issue-00001.md"));
+
+    // Sync re-materializes the issue files (stale ones replaced).
+    let issue_file = std::path::Path::new(&issues_repo.root_path).join("issue-00001.md");
+    std::fs::remove_file(&issue_file).unwrap();
+    h.repositories.sync(&issues_repo.id).await.unwrap();
+    assert!(issue_file.exists(), "sync must restore issue files");
+
+    // Removing the issues repo also removes the materialized files.
+    let dir = issues_repo.root_path.clone();
+    assert!(std::path::Path::new(&dir).exists());
+    h.repositories.remove(&issues_repo.id).unwrap();
+    assert!(!std::path::Path::new(&dir).exists());
 }
 
 #[tokio::test]

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import type {
   ChatSession,
   ProviderConfig,
@@ -7,6 +8,7 @@ import type {
 } from "../../domain/types";
 import { EXTERNAL_PROVIDERS, PROVIDER_LABELS } from "../../domain/types";
 import { useChat } from "../../application/useChat";
+import { api } from "../../infrastructure/api";
 import { ConsentDialog } from "./ConsentDialog";
 import { MessageBubble } from "./MessageBubble";
 
@@ -40,7 +42,7 @@ export function ChatView({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat.messages.length, chat.busy]);
+  }, [chat.messages.length, chat.busy, chat.streamingText]);
 
   const submit = async () => {
     const question = input;
@@ -60,6 +62,35 @@ export function ChatView({
             <span className="workspace-path">{workspace.name}</span>
           </div>
         </div>
+        <div className="chat-header-actions">
+          {session && chat.messages.length > 0 && (
+            <button
+              title="Export chat as markdown"
+              onClick={async () => {
+                const dest = await save({
+                  defaultPath: `${session.title.slice(0, 40)}.md`,
+                  filters: [{ name: "Markdown", extensions: ["md"] }],
+                });
+                if (dest) await api.exportChat(session.id, dest);
+              }}
+            >
+              ⤓ Export
+            </button>
+          )}
+          <select
+            className="provider-select"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as ProviderKind)}
+            title="Model provider for this chat"
+          >
+            {enabled.map((p) => (
+              <option key={p.kind} value={p.kind}>
+                {PROVIDER_LABELS[p.kind]}
+                {EXTERNAL_PROVIDERS.includes(p.kind) ? " ↗" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
       <div className="messages">
@@ -71,26 +102,21 @@ export function ChatView({
           </div>
         )}
         {chat.messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble key={m.id} message={m} workspaceId={workspace.id} />
         ))}
-        {chat.busy && <div className="thinking">Thinking…</div>}
+        {chat.streamingText !== null &&
+          (chat.streamingText === "" ? (
+            <div className="thinking">Thinking…</div>
+          ) : (
+            <div className="message assistant streaming">
+              <div className="message-content">{chat.streamingText}</div>
+            </div>
+          ))}
         {chat.error && <div className="error">{chat.error}</div>}
         <div ref={bottomRef} />
       </div>
 
       <footer className="composer">
-        <select
-          value={provider}
-          onChange={(e) => setProvider(e.target.value as ProviderKind)}
-          title="Model provider for this question"
-        >
-          {enabled.map((p) => (
-            <option key={p.kind} value={p.kind}>
-              {PROVIDER_LABELS[p.kind]}
-              {EXTERNAL_PROVIDERS.includes(p.kind) ? " ↗" : ""}
-            </option>
-          ))}
-        </select>
         <textarea
           value={input}
           placeholder="Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"

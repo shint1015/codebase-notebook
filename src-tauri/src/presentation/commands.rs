@@ -97,11 +97,70 @@ pub async fn add_git_repository(
 }
 
 #[tauri::command]
+pub async fn add_github_issues_repository(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    spec: String,
+) -> CommandResult<Repository> {
+    Ok(state
+        .repositories
+        .add_github_issues(&workspace_id, &spec)
+        .await?)
+}
+
+#[tauri::command]
 pub fn delete_repository(
     state: State<'_, AppState>,
     repository_id: String,
 ) -> CommandResult<()> {
     Ok(state.repositories.remove(&repository_id)?)
+}
+
+#[tauri::command]
+pub async fn sync_repository(
+    state: State<'_, AppState>,
+    repository_id: String,
+) -> CommandResult<Repository> {
+    Ok(state.repositories.sync(&repository_id).await?)
+}
+
+#[tauri::command]
+pub fn rebuild_watchers(
+    state: State<'_, AppState>,
+    watcher: State<'_, super::state::WatcherHandle>,
+) -> CommandResult<()> {
+    let targets = state.watch_targets()?;
+    Ok(watcher.0.rebuild(targets)?)
+}
+
+// ---- publishing ----
+
+#[tauri::command]
+pub async fn create_github_issue(
+    state: State<'_, AppState>,
+    spec: String,
+    title: String,
+    body: String,
+) -> CommandResult<String> {
+    Ok(state.publish.create_issue(&spec, &title, &body).await?)
+}
+
+#[tauri::command]
+pub fn list_wiki_repositories(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> CommandResult<Vec<Repository>> {
+    Ok(state.publish.wiki_repositories(&workspace_id)?)
+}
+
+#[tauri::command]
+pub fn write_wiki_page(
+    state: State<'_, AppState>,
+    repository_id: String,
+    title: String,
+    content: String,
+) -> CommandResult<String> {
+    Ok(state.publish.write_wiki_page(&repository_id, &title, &content)?)
 }
 
 #[tauri::command]
@@ -225,6 +284,50 @@ pub fn list_chat_messages(
 }
 
 #[tauri::command]
+pub fn rename_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+    title: String,
+) -> CommandResult<()> {
+    Ok(state.chats.rename_session(&session_id, &title)?)
+}
+
+#[tauri::command]
+pub fn delete_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<()> {
+    Ok(state.chats.delete_session(&session_id)?)
+}
+
+#[tauri::command]
+pub fn export_chat(
+    state: State<'_, AppState>,
+    session_id: String,
+    dest_path: String,
+) -> CommandResult<()> {
+    let markdown = state.chats.export_markdown(&session_id)?;
+    std::fs::write(&dest_path, markdown).map_err(|e| CommandError {
+        code: "storage".into(),
+        message: format!("write export: {e}"),
+    })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reveal_source(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    rel_path: String,
+    line: i64,
+) -> CommandResult<()> {
+    let path = state
+        .repositories
+        .resolve_source_path(&workspace_id, &rel_path)?;
+    Ok(crate::infrastructure::reveal::open_in_editor(&path, line)?)
+}
+
+#[tauri::command]
 pub async fn prepare_ask(
     state: State<'_, AppState>,
     workspace_id: String,
@@ -243,10 +346,21 @@ pub async fn ask(
     question: String,
     provider: String,
     consent_granted: bool,
+    on_token: tauri::ipc::Channel<String>,
 ) -> CommandResult<Message> {
     let kind = parse_kind(&provider)?;
+    let sink = move |token: &str| {
+        on_token.send(token.to_string()).ok();
+    };
     Ok(state
         .ask
-        .execute(&session_id, &workspace_id, &question, kind, consent_granted)
+        .execute_stream(
+            &session_id,
+            &workspace_id,
+            &question,
+            kind,
+            consent_granted,
+            &sink,
+        )
         .await?)
 }
