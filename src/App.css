@@ -231,8 +231,10 @@ body {
 /* markdown answers */
 
 /* Rendered markdown manages its own block spacing — not pre-wrap, or the
-   newlines between block elements show up as extra vertical gaps. */
-.markdown {
+   newlines between block elements show up as extra vertical gaps. The
+   compound selector outranks `.message-content { white-space: pre-wrap }`
+   regardless of source order. */
+.message-content.markdown {
   white-space: normal;
 }
 
