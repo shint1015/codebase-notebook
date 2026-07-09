@@ -71,7 +71,7 @@ export function useChat(
       } catch (e) {
         if (isCommandError(e) && e.code === "consent_required") {
           // Backstop — the prepare step should normally catch this first.
-          const preparation = await api.prepareAsk(workspaceId, question, provider);
+          const preparation = await api.prepareAsk(workspaceId, question, provider, sessionId);
           setPendingConsent({ question, provider, preparation });
         } else {
           setError(isCommandError(e) ? e.message : String(e));
@@ -81,7 +81,7 @@ export function useChat(
         setStreamingText(null);
       }
     },
-    [workspaceId, ensureSession],
+    [workspaceId, sessionId, ensureSession],
   );
 
   /** Entry point from the input box: checks consent before anything is sent. */
@@ -92,7 +92,7 @@ export function useChat(
       const trimmed = question.trim();
       if (!trimmed) return;
       try {
-        const preparation = await api.prepareAsk(workspaceId, trimmed, provider);
+        const preparation = await api.prepareAsk(workspaceId, trimmed, provider, sessionId);
         if (preparation.requires_consent) {
           setPendingConsent({ question: trimmed, provider, preparation });
           return;
@@ -102,7 +102,7 @@ export function useChat(
         setError(isCommandError(e) ? e.message : String(e));
       }
     },
-    [workspaceId, runAsk],
+    [workspaceId, sessionId, runAsk],
   );
 
   const approveConsent = useCallback(async () => {

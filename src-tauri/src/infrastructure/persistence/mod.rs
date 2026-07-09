@@ -2,6 +2,7 @@ pub mod chat_repo;
 pub mod document_repo;
 pub mod provider_repo;
 pub mod repository_repo;
+pub mod settings_repo;
 pub mod workspace_repo;
 
 use std::path::Path;
@@ -191,6 +192,13 @@ const MIGRATIONS: &[&str] = &[
     r#"
             ALTER TABLE repositories ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'local';
             UPDATE repositories SET source_kind = 'git' WHERE remote_url IS NOT NULL;
+            "#,
+    // v4: key-value application settings (embedding model, rerank toggle...).
+    r#"
+            CREATE TABLE app_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             "#,
 ];
 

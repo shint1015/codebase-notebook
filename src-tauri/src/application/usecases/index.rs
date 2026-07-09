@@ -2,17 +2,14 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::application::chunking::chunk_text;
 use crate::domain::entities::chunk::Chunk;
 use crate::domain::entities::document::Document;
 use crate::domain::error::DomainResult;
 use crate::domain::repositories::{
     DocumentRepository, RepositoryRepository, WorkspaceRepository,
 };
-use crate::domain::services::{EmbeddingProvider, SecretScanner, SourceScanner};
+use crate::domain::services::{Chunker, EmbeddingProvider, SecretScanner, SourceScanner};
 
-const MAX_CHUNK_LINES: usize = 60;
-const CHUNK_OVERLAP_LINES: usize = 8;
 /// Embedding batch size kept small so local embedders stay responsive.
 const EMBED_BATCH: usize = 16;
 
@@ -32,6 +29,7 @@ pub struct IndexWorkspaceUseCase {
     documents: Arc<dyn DocumentRepository>,
     scanner: Arc<dyn SourceScanner>,
     secret_scanner: Arc<dyn SecretScanner>,
+    chunker: Arc<dyn Chunker>,
     embedder: Arc<dyn EmbeddingProvider>,
 }
 
@@ -42,6 +40,7 @@ impl IndexWorkspaceUseCase {
         documents: Arc<dyn DocumentRepository>,
         scanner: Arc<dyn SourceScanner>,
         secret_scanner: Arc<dyn SecretScanner>,
+        chunker: Arc<dyn Chunker>,
         embedder: Arc<dyn EmbeddingProvider>,
     ) -> Self {
         Self {
@@ -50,6 +49,7 @@ impl IndexWorkspaceUseCase {
             documents,
             scanner,
             secret_scanner,
+            chunker,
             embedder,
         }
     }
@@ -127,7 +127,9 @@ impl IndexWorkspaceUseCase {
             };
             self.documents.upsert_document(&document)?;
 
-            let chunks: Vec<Chunk> = chunk_text(&content, MAX_CHUNK_LINES, CHUNK_OVERLAP_LINES)
+            let chunks: Vec<Chunk> = self
+                .chunker
+                .chunk(&content, &file.language)
                 .into_iter()
                 .enumerate()
                 .map(|(seq, c)| Chunk {

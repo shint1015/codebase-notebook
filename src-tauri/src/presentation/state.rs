@@ -14,6 +14,7 @@ use crate::domain::error::DomainResult;
 use crate::domain::repositories::{
     DocumentRepository, ProviderConfigRepository, RepositoryRepository,
 };
+use crate::infrastructure::indexing::ast_chunker::SmartChunker;
 use crate::infrastructure::indexing::git::GitCliCloner;
 use crate::infrastructure::indexing::github_issues::GitHubIssueFetcher;
 use crate::infrastructure::indexing::scanner::FsSourceScanner;
@@ -21,6 +22,7 @@ use crate::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use crate::infrastructure::persistence::document_repo::SqliteDocumentRepository;
 use crate::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
 use crate::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
+use crate::infrastructure::persistence::settings_repo::SqliteSettingsRepository;
 use crate::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::providers::ollama::OllamaEmbedding;
@@ -28,7 +30,7 @@ use crate::infrastructure::providers::router::ConfiguredProviderRouter;
 use crate::infrastructure::secrets::keyring_store::KeyringSecretStore;
 use crate::infrastructure::secrets::scanner::RegexSecretScanner;
 
-const EMBEDDING_MODEL: &str = "nomic-embed-text";
+pub const EMBEDDING_MODEL: &str = "nomic-embed-text";
 
 /// Composition root: wires infrastructure implementations into use cases.
 /// This is the only place in the app that knows concrete types.
@@ -42,6 +44,7 @@ pub struct AppState {
     pub search: Arc<SearchUseCase>,
     pub ask: AskUseCase,
     pub documents: Arc<dyn DocumentRepository>,
+    pub settings: Arc<dyn crate::domain::services::SettingsRepository>,
     repository_reader: Arc<dyn RepositoryRepository>,
 }
 
@@ -58,6 +61,8 @@ impl AppState {
         let document_repo: Arc<dyn DocumentRepository> =
             Arc::new(SqliteDocumentRepository::new(db.clone()));
         let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
+        let settings_repo: Arc<dyn crate::domain::services::SettingsRepository> =
+            Arc::new(SqliteSettingsRepository::new(db.clone()));
         let provider_repo: Arc<SqliteProviderConfigRepository> =
             Arc::new(SqliteProviderConfigRepository::new(db));
 
@@ -71,14 +76,24 @@ impl AppState {
             .find(ProviderKind::Ollama)?
             .unwrap_or_else(|| ProviderConfig::default_for(ProviderKind::Ollama))
             .base_url;
-        let embedder = Arc::new(OllamaEmbedding::new(&ollama_base_url, EMBEDDING_MODEL));
+        let embedder = Arc::new(OllamaEmbedding::new(
+            &ollama_base_url,
+            EMBEDDING_MODEL,
+            settings_repo.clone(),
+        ));
 
         let router = Arc::new(ConfiguredProviderRouter::new(
             provider_repo.clone(),
             secret_store.clone(),
         ));
 
-        let search = Arc::new(SearchUseCase::new(document_repo.clone(), embedder.clone()));
+        let search = Arc::new(SearchUseCase::new(
+            document_repo.clone(),
+            embedder.clone(),
+            router.clone(),
+            provider_repo.clone(),
+            settings_repo.clone(),
+        ));
 
         Ok(Self {
             workspaces: WorkspaceUseCases::new(workspace_repo.clone()),
@@ -105,6 +120,7 @@ impl AppState {
                 document_repo.clone(),
                 scanner,
                 secret_scanner,
+                Arc::new(SmartChunker),
                 embedder,
             ),
             ask: AskUseCase::new(
@@ -118,6 +134,7 @@ impl AppState {
             ),
             search,
             documents: document_repo,
+            settings: settings_repo,
         })
     }
 

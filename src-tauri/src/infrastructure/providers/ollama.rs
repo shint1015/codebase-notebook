@@ -133,20 +133,36 @@ impl LlmProvider for OllamaProvider {
 
 /// Embeddings via Ollama's /api/embed. Availability is probed cheaply so the
 /// app silently degrades to keyword-only search when Ollama (or the model)
-/// is absent.
+/// is absent. The model is resolved from settings on every call so users can
+/// switch (e.g. to bge-m3 for Japanese) without restarting.
 pub struct OllamaEmbedding {
     base_url: String,
-    model: String,
+    default_model: String,
+    settings: std::sync::Arc<dyn crate::domain::services::SettingsRepository>,
     client: reqwest::Client,
 }
 
 impl OllamaEmbedding {
-    pub fn new(base_url: &str, model: &str) -> Self {
+    pub fn new(
+        base_url: &str,
+        default_model: &str,
+        settings: std::sync::Arc<dyn crate::domain::services::SettingsRepository>,
+    ) -> Self {
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            model: model.to_string(),
+            default_model: default_model.to_string(),
+            settings,
             client: http_client(),
         }
+    }
+
+    fn model(&self) -> String {
+        self.settings
+            .get("embedding_model")
+            .ok()
+            .flatten()
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or_else(|| self.default_model.clone())
     }
 }
 
@@ -171,7 +187,7 @@ impl EmbeddingProvider for OllamaEmbedding {
         let response = self
             .client
             .post(format!("{}/api/embed", self.base_url))
-            .json(&json!({"model": self.model, "input": texts}))
+            .json(&json!({"model": self.model(), "input": texts}))
             .send()
             .await
             .map_err(|e| DomainError::Provider(format!("ollama embed: {e}")))?;
@@ -199,7 +215,8 @@ impl EmbeddingProvider for OllamaEmbedding {
         let Ok(tags) = response.json::<OllamaTagsResponse>().await else {
             return false;
         };
-        let wanted = self.model.as_str();
+        let wanted = self.model();
+        let wanted = wanted.as_str();
         tags.models
             .iter()
             .any(|m| m.name == wanted || m.name.starts_with(&format!("{wanted}:")))

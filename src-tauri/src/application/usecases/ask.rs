@@ -82,6 +82,47 @@ impl AskUseCase {
         Ok(())
     }
 
+    /// Rewrite a follow-up question into a standalone retrieval query using
+    /// the conversation. Always runs on the LOCAL model — history must never
+    /// reach an external provider before the consent gate. Any failure falls
+    /// back to the raw question.
+    async fn retrieval_query(&self, session_id: Option<&str>, question: &str) -> String {
+        let Some(session_id) = session_id else {
+            return question.to_string();
+        };
+        let Ok(history) = self.recent_history(session_id) else {
+            return question.to_string();
+        };
+        if history.is_empty() {
+            return question.to_string();
+        }
+        let Ok(config) = self.resolve_config(ProviderKind::Ollama) else {
+            return question.to_string();
+        };
+        let Ok(llm) = self.router.resolve(ProviderKind::Ollama) else {
+            return question.to_string();
+        };
+        let mut turns = history;
+        turns.push(ChatTurn {
+            role: "user".to_string(),
+            content: question.to_string(),
+        });
+        let system = "Rewrite the user's latest message as ONE standalone search query that \
+                      resolves references to the earlier conversation (\"it\", \"that file\"...). \
+                      Keep the original language. Output ONLY the query text.";
+        match llm.chat(&config.default_model, system, &turns).await {
+            Ok(rewritten) => {
+                let rewritten = rewritten.trim();
+                if rewritten.is_empty() || rewritten.chars().count() > 400 {
+                    question.to_string()
+                } else {
+                    rewritten.to_string()
+                }
+            }
+            Err(_) => question.to_string(),
+        }
+    }
+
     /// Dry-run: retrieve sources and report whether user consent is needed
     /// before anything leaves the machine.
     pub async fn prepare(
@@ -89,13 +130,15 @@ impl AskUseCase {
         workspace_id: &str,
         question: &str,
         provider: ProviderKind,
+        session_id: Option<&str>,
     ) -> DomainResult<AskPreparation> {
         let workspace = self.workspaces.find_by_id(workspace_id)?;
         self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
+        let query = self.retrieval_query(session_id, question).await;
         let hits = self
             .search
-            .execute(workspace_id, question, RETRIEVE_LIMIT)
+            .execute(workspace_id, &query, RETRIEVE_LIMIT)
             .await?;
         let is_external = provider.is_external();
         Ok(AskPreparation {
@@ -163,9 +206,10 @@ impl AskUseCase {
             }
         }
 
+        let query = self.retrieval_query(Some(session_id), question).await;
         let hits = self
             .search
-            .execute(workspace_id, question, RETRIEVE_LIMIT)
+            .execute(workspace_id, &query, RETRIEVE_LIMIT)
             .await?;
 
         let history = self.recent_history(session_id)?;
