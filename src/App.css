@@ -620,6 +620,18 @@ textarea:focus {
   font-style: italic;
 }
 
+.message.streaming .message-content::after {
+  content: "▍";
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 .error {
   color: var(--danger);
   font-size: 12px;

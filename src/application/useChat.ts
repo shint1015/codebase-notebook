@@ -27,6 +27,8 @@ export function useChat(
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  /// Incremental assistant text while the model generates (null = idle).
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingConsent, setPendingConsent] = useState<PendingConsent | null>(null);
 
@@ -59,9 +61,12 @@ export function useChat(
       if (!workspaceId) return;
       setBusy(true);
       setError(null);
+      setStreamingText("");
       try {
         const sid = await ensureSession(question);
-        await api.ask(sid, workspaceId, question, provider, consentGranted);
+        await api.ask(sid, workspaceId, question, provider, consentGranted, (token) =>
+          setStreamingText((current) => (current ?? "") + token),
+        );
         setMessages(await api.listChatMessages(sid));
       } catch (e) {
         if (isCommandError(e) && e.code === "consent_required") {
@@ -73,6 +78,7 @@ export function useChat(
         }
       } finally {
         setBusy(false);
+        setStreamingText(null);
       }
     },
     [workspaceId, ensureSession],
@@ -121,6 +127,7 @@ export function useChat(
   return {
     messages,
     busy,
+    streamingText,
     error,
     send,
     pendingConsent,

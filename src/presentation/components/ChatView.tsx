@@ -40,7 +40,7 @@ export function ChatView({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat.messages.length, chat.busy]);
+  }, [chat.messages.length, chat.busy, chat.streamingText]);
 
   const submit = async () => {
     const question = input;
@@ -86,7 +86,14 @@ export function ChatView({
         {chat.messages.map((m) => (
           <MessageBubble key={m.id} message={m} />
         ))}
-        {chat.busy && <div className="thinking">Thinking…</div>}
+        {chat.streamingText !== null &&
+          (chat.streamingText === "" ? (
+            <div className="thinking">Thinking…</div>
+          ) : (
+            <div className="message assistant streaming">
+              <div className="message-content">{chat.streamingText}</div>
+            </div>
+          ))}
         {chat.error && <div className="error">{chat.error}</div>}
         <div ref={bottomRef} />
       </div>

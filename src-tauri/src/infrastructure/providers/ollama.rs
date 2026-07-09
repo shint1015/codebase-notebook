@@ -4,9 +4,9 @@ use serde_json::json;
 
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::services::{ChatTurn, EmbeddingProvider, LlmProvider};
+use crate::domain::services::{ChatTurn, EmbeddingProvider, LlmProvider, TokenSink};
 
-use super::{http_client, probe_client};
+use super::{for_each_line, http_client, probe_client};
 
 /// Local inference via the Ollama HTTP API. This is the default provider —
 /// nothing ever leaves the machine.
@@ -68,6 +68,50 @@ impl LlmProvider for OllamaProvider {
             .await
             .map_err(|e| DomainError::Provider(format!("ollama response: {e}")))?;
         Ok(parsed.message.content)
+    }
+
+    async fn chat_stream(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        on_token: &TokenSink,
+    ) -> DomainResult<String> {
+        let mut messages = vec![json!({"role": "system", "content": system})];
+        for turn in turns {
+            messages.push(json!({"role": turn.role, "content": turn.content}));
+        }
+        let response = self
+            .client
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&json!({
+                "model": model,
+                "messages": messages,
+                "stream": true,
+            }))
+            .send()
+            .await
+            .map_err(|e| DomainError::Provider(format!("ollama request: {e}")))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(DomainError::Provider(format!(
+                "ollama returned {status}: {body}"
+            )));
+        }
+        // JSONL: one {"message":{"content":"…"},"done":bool} object per line.
+        let mut full = String::new();
+        for_each_line(response, |line| {
+            if let Ok(parsed) = serde_json::from_str::<OllamaChatResponse>(line) {
+                if !parsed.message.content.is_empty() {
+                    full.push_str(&parsed.message.content);
+                    on_token(&parsed.message.content);
+                }
+            }
+            Ok(())
+        })
+        .await?;
+        Ok(full)
     }
 
     async fn test_connection(&self) -> DomainResult<String> {

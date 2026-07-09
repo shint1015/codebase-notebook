@@ -285,10 +285,21 @@ pub async fn ask(
     question: String,
     provider: String,
     consent_granted: bool,
+    on_token: tauri::ipc::Channel<String>,
 ) -> CommandResult<Message> {
     let kind = parse_kind(&provider)?;
+    let sink = move |token: &str| {
+        on_token.send(token.to_string()).ok();
+    };
     Ok(state
         .ask
-        .execute(&session_id, &workspace_id, &question, kind, consent_granted)
+        .execute_stream(
+            &session_id,
+            &workspace_id,
+            &question,
+            kind,
+            consent_granted,
+            &sink,
+        )
         .await?)
 }
