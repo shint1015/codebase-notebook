@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Asking in a workspace with no indexed sources now returns a clear
+  "run indexing first" error instead of a model refusal.
+- The system prompt includes a workspace overview (repository list), so
+  meta questions like "which repositories are in this workspace?" are
+  answerable.
+
 ## [0.2.0] - 2026-07-09
 
 ### Added
