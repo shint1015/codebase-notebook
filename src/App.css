@@ -498,6 +498,13 @@ textarea:focus {
   cursor: default;
 }
 
+.repo-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .index-row {
   display: flex;
   align-items: center;

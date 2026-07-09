@@ -42,7 +42,11 @@ pub struct AppState {
     pub search: Arc<SearchUseCase>,
     pub ask: AskUseCase,
     pub documents: Arc<dyn DocumentRepository>,
+    repository_reader: Arc<dyn RepositoryRepository>,
 }
+
+/// Managed handle for the filesystem watcher (armed in the app setup hook).
+pub struct WatcherHandle(pub Arc<crate::infrastructure::indexing::watch::SourceWatcher>);
 
 impl AppState {
     pub fn new(db_path: &Path, clones_dir: PathBuf) -> DomainResult<Self> {
@@ -83,10 +87,12 @@ impl AppState {
                 repository_repo.clone(),
                 document_repo.clone(),
                 cloner.clone(),
+                cloner.clone(),
                 issue_service.clone(),
                 clones_dir,
             ),
             publish: PublishUseCases::new(repository_repo.clone(), issue_service, cloner),
+            repository_reader: repository_repo.clone(),
             chats: ChatUseCases::new(chat_repo.clone()),
             providers: ProviderUseCases::new(
                 provider_repo.clone(),
@@ -113,5 +119,21 @@ impl AppState {
             search,
             documents: document_repo,
         })
+    }
+
+    /// Local sources to watch: (root path, workspace id). Managed clones and
+    /// issue sets only change through explicit app actions, which re-index
+    /// themselves.
+    pub fn watch_targets(&self) -> DomainResult<Vec<(String, String)>> {
+        use crate::domain::entities::repository::SourceKind;
+        let mut targets = Vec::new();
+        for workspace in self.workspaces.list()? {
+            for repository in self.repository_reader.list_by_workspace(&workspace.id)? {
+                if repository.source_kind == SourceKind::Local {
+                    targets.push((repository.root_path, workspace.id.clone()));
+                }
+            }
+        }
+        Ok(targets)
     }
 }

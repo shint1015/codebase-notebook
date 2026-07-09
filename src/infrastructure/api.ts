@@ -30,6 +30,9 @@ export const api = {
     invoke<Repository>("add_github_issues_repository", { workspaceId, spec }),
   deleteRepository: (repositoryId: string) =>
     invoke<void>("delete_repository", { repositoryId }),
+  syncRepository: (repositoryId: string) =>
+    invoke<Repository>("sync_repository", { repositoryId }),
+  rebuildWatchers: () => invoke<void>("rebuild_watchers"),
 
   createGithubIssue: (spec: string, title: string, body: string) =>
     invoke<string>("create_github_issue", { spec, title, body }),

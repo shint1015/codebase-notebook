@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { api } from "../infrastructure/api";
 import type { IndexReport, Repository } from "../domain/types";
 import { isCommandError } from "../domain/types";
@@ -16,6 +17,8 @@ export function useRepositories(workspaceId: string | null) {
       return;
     }
     setRepositories(await api.listRepositories(workspaceId));
+    // Keep the filesystem watcher aligned with the current source set.
+    void api.rebuildWatchers().catch(() => {});
   }, [workspaceId]);
 
   useEffect(() => {
@@ -23,6 +26,22 @@ export function useRepositories(workspaceId: string | null) {
     setError(null);
     void refresh();
   }, [refresh]);
+
+  // Background re-index (file watcher) results update the report banner.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const unlisten = listen<{ workspaceId: string; report: IndexReport }>(
+      "workspace-indexed",
+      (event) => {
+        if (event.payload.workspaceId === workspaceId) {
+          setLastReport(event.payload.report);
+        }
+      },
+    );
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, [workspaceId]);
 
   const wrap = useCallback(
     async (action: () => Promise<void>) => {
@@ -85,6 +104,27 @@ export function useRepositories(workspaceId: string | null) {
     [refresh, wrap],
   );
 
+  /// Refresh a managed source from its remote, then re-index.
+  const sync = useCallback(
+    (repositoryId: string) =>
+      wrap(async () => {
+        if (!workspaceId) return;
+        setCloning(true);
+        try {
+          await api.syncRepository(repositoryId);
+        } finally {
+          setCloning(false);
+        }
+        setIndexing(true);
+        try {
+          setLastReport(await api.indexWorkspace(workspaceId));
+        } finally {
+          setIndexing(false);
+        }
+      }),
+    [workspaceId, wrap],
+  );
+
   const index = useCallback(
     () =>
       wrap(async () => {
@@ -105,6 +145,7 @@ export function useRepositories(workspaceId: string | null) {
     addGit,
     addGithubIssues,
     remove,
+    sync,
     index,
     cloning,
     indexing,
