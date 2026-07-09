@@ -161,6 +161,7 @@ async fn setup() -> Harness {
         repository_repo.clone(),
         document_repo.clone(),
         Arc::new(GitCliCloner),
+        Arc::new(GitCliCloner),
         Arc::new(FakeIssueFetcher),
         tmp.path().join("clones"),
     );
@@ -424,6 +425,12 @@ async fn single_file_and_github_issues_sources() {
     assert!(hits
         .iter()
         .any(|hit| hit.rel_path == "app-issues/issue-00001.md"));
+
+    // Sync re-materializes the issue files (stale ones replaced).
+    let issue_file = std::path::Path::new(&issues_repo.root_path).join("issue-00001.md");
+    std::fs::remove_file(&issue_file).unwrap();
+    h.repositories.sync(&issues_repo.id).await.unwrap();
+    assert!(issue_file.exists(), "sync must restore issue files");
 
     // Removing the issues repo also removes the materialized files.
     let dir = issues_repo.root_path.clone();

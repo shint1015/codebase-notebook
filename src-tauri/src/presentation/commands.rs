@@ -116,6 +116,23 @@ pub fn delete_repository(
     Ok(state.repositories.remove(&repository_id)?)
 }
 
+#[tauri::command]
+pub async fn sync_repository(
+    state: State<'_, AppState>,
+    repository_id: String,
+) -> CommandResult<Repository> {
+    Ok(state.repositories.sync(&repository_id).await?)
+}
+
+#[tauri::command]
+pub fn rebuild_watchers(
+    state: State<'_, AppState>,
+    watcher: State<'_, super::state::WatcherHandle>,
+) -> CommandResult<()> {
+    let targets = state.watch_targets()?;
+    Ok(watcher.0.rebuild(targets)?)
+}
+
 // ---- publishing ----
 
 #[tauri::command]

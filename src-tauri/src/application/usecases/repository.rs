@@ -6,13 +6,14 @@ use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::repositories::{
     DocumentRepository, RepositoryRepository, WorkspaceRepository,
 };
-use crate::domain::services::{IssueDoc, IssueFetcher, RepoCloner};
+use crate::domain::services::{GitSync, IssueDoc, IssueFetcher, RepoCloner};
 
 pub struct RepositoryUseCases {
     workspaces: Arc<dyn WorkspaceRepository>,
     repositories: Arc<dyn RepositoryRepository>,
     documents: Arc<dyn DocumentRepository>,
     cloner: Arc<dyn RepoCloner>,
+    git_sync: Arc<dyn GitSync>,
     issue_fetcher: Arc<dyn IssueFetcher>,
     /// App-managed directory where git clones and fetched issues live
     /// (<app data>/repos/<workspace_id>/<name>).
@@ -25,6 +26,7 @@ impl RepositoryUseCases {
         repositories: Arc<dyn RepositoryRepository>,
         documents: Arc<dyn DocumentRepository>,
         cloner: Arc<dyn RepoCloner>,
+        git_sync: Arc<dyn GitSync>,
         issue_fetcher: Arc<dyn IssueFetcher>,
         clones_dir: PathBuf,
     ) -> Self {
@@ -33,9 +35,57 @@ impl RepositoryUseCases {
             repositories,
             documents,
             cloner,
+            git_sync,
             issue_fetcher,
             clones_dir,
         }
+    }
+
+    /// Refresh a managed source from its remote: `git pull` for clones,
+    /// re-fetch for GitHub issues. Local sources need no sync (the file
+    /// watcher covers them). Callers should re-index afterwards.
+    pub async fn sync(&self, repository_id: &str) -> DomainResult<Repository> {
+        let repository = self.repositories.find_by_id(repository_id)?;
+        match repository.source_kind {
+            SourceKind::Local => {}
+            SourceKind::Git => {
+                let git = self.git_sync.clone();
+                let path = repository.root_path.clone();
+                tauri::async_runtime::spawn_blocking(move || git.pull(&path))
+                    .await
+                    .map_err(|e| DomainError::Indexing(format!("sync task failed: {e}")))??;
+            }
+            SourceKind::GithubIssues => {
+                let spec = repository
+                    .remote_url
+                    .as_deref()
+                    .and_then(normalize_github_spec)
+                    .ok_or_else(|| {
+                        DomainError::Validation("issues source has no valid remote".into())
+                    })?;
+                let issues = self.issue_fetcher.fetch_issues(&spec).await?;
+                let dir = std::path::Path::new(&repository.root_path);
+                std::fs::create_dir_all(dir)
+                    .map_err(|e| DomainError::Indexing(format!("create issues dir: {e}")))?;
+                // Replace the whole materialized set so closed/deleted issues
+                // disappear from the index after re-indexing.
+                for entry in std::fs::read_dir(dir)
+                    .map_err(|e| DomainError::Indexing(format!("read issues dir: {e}")))?
+                    .flatten()
+                {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with("issue-") && name.ends_with(".md") {
+                        std::fs::remove_file(entry.path()).ok();
+                    }
+                }
+                for issue in &issues {
+                    let file = dir.join(format!("issue-{:05}.md", issue.number));
+                    std::fs::write(&file, issue_markdown(issue))
+                        .map_err(|e| DomainError::Indexing(format!("write issue file: {e}")))?;
+                }
+            }
+        }
+        Ok(repository)
     }
 
     pub fn list(&self, workspace_id: &str) -> DomainResult<Vec<Repository>> {

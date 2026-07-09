@@ -117,16 +117,27 @@ export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
                   {repo.remote_url ?? repo.root_path}
                 </div>
               </div>
-              <button
-                className="danger"
-                onClick={() => {
-                  if (confirm(`Remove repository "${repo.name}" from this workspace?`)) {
-                    void repos.remove(repo.id);
-                  }
-                }}
-              >
-                Remove
-              </button>
+              <div className="repo-actions">
+                {repo.source_kind !== "local" && (
+                  <button
+                    title="Pull latest from remote and re-index"
+                    disabled={repos.cloning || repos.indexing}
+                    onClick={() => void repos.sync(repo.id)}
+                  >
+                    ⟳ Sync
+                  </button>
+                )}
+                <button
+                  className="danger"
+                  onClick={() => {
+                    if (confirm(`Remove repository "${repo.name}" from this workspace?`)) {
+                      void repos.remove(repo.id);
+                    }
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
           {repos.repositories.length === 0 && (

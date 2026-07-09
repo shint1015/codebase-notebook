@@ -27,6 +27,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 futures-util = "0.3"
 walkdir = "2"
 regex = "1"
+notify = "7"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 tokio = { version = "1", features = ["sync"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
