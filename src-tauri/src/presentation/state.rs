@@ -1,19 +1,24 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::application::usecases::ask::AskUseCase;
 use crate::application::usecases::chat::ChatUseCases;
 use crate::application::usecases::index::IndexWorkspaceUseCase;
 use crate::application::usecases::provider::ProviderUseCases;
+use crate::application::usecases::repository::RepositoryUseCases;
 use crate::application::usecases::search::SearchUseCase;
 use crate::application::usecases::workspace::WorkspaceUseCases;
 use crate::domain::entities::provider::{ProviderConfig, ProviderKind};
 use crate::domain::error::DomainResult;
-use crate::domain::repositories::{DocumentRepository, ProviderConfigRepository};
+use crate::domain::repositories::{
+    DocumentRepository, ProviderConfigRepository, RepositoryRepository,
+};
+use crate::infrastructure::indexing::git::GitCliCloner;
 use crate::infrastructure::indexing::scanner::FsSourceScanner;
 use crate::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use crate::infrastructure::persistence::document_repo::SqliteDocumentRepository;
 use crate::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
+use crate::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
 use crate::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::providers::ollama::OllamaEmbedding;
@@ -27,6 +32,7 @@ const EMBEDDING_MODEL: &str = "nomic-embed-text";
 /// This is the only place in the app that knows concrete types.
 pub struct AppState {
     pub workspaces: WorkspaceUseCases,
+    pub repositories: RepositoryUseCases,
     pub chats: ChatUseCases,
     pub providers: ProviderUseCases,
     pub index: IndexWorkspaceUseCase,
@@ -36,10 +42,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db_path: &Path) -> DomainResult<Self> {
+    pub fn new(db_path: &Path, clones_dir: PathBuf) -> DomainResult<Self> {
         let db = Db::open(db_path)?;
 
         let workspace_repo = Arc::new(SqliteWorkspaceRepository::new(db.clone()));
+        let repository_repo: Arc<dyn RepositoryRepository> =
+            Arc::new(SqliteRepositoryRepository::new(db.clone()));
         let document_repo: Arc<dyn DocumentRepository> =
             Arc::new(SqliteDocumentRepository::new(db.clone()));
         let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
@@ -49,6 +57,7 @@ impl AppState {
         let secret_store = Arc::new(KeyringSecretStore);
         let secret_scanner = Arc::new(RegexSecretScanner::new());
         let scanner = Arc::new(FsSourceScanner);
+        let cloner = Arc::new(GitCliCloner);
 
         let ollama_base_url = provider_repo
             .find(ProviderKind::Ollama)?
@@ -65,6 +74,13 @@ impl AppState {
 
         Ok(Self {
             workspaces: WorkspaceUseCases::new(workspace_repo.clone()),
+            repositories: RepositoryUseCases::new(
+                workspace_repo.clone(),
+                repository_repo.clone(),
+                document_repo.clone(),
+                cloner,
+                clones_dir,
+            ),
             chats: ChatUseCases::new(chat_repo.clone()),
             providers: ProviderUseCases::new(
                 provider_repo.clone(),
@@ -73,6 +89,7 @@ impl AppState {
             ),
             index: IndexWorkspaceUseCase::new(
                 workspace_repo.clone(),
+                repository_repo,
                 document_repo.clone(),
                 scanner,
                 secret_scanner,

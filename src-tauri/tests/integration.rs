@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use codebase_notebook_lib::application::usecases::ask::AskUseCase;
 use codebase_notebook_lib::application::usecases::chat::ChatUseCases;
 use codebase_notebook_lib::application::usecases::index::IndexWorkspaceUseCase;
+use codebase_notebook_lib::application::usecases::repository::RepositoryUseCases;
 use codebase_notebook_lib::application::usecases::search::SearchUseCase;
 use codebase_notebook_lib::application::usecases::workspace::WorkspaceUseCases;
 use codebase_notebook_lib::domain::entities::provider::{ProviderConfig, ProviderKind};
@@ -16,10 +17,12 @@ use codebase_notebook_lib::domain::repositories::ProviderConfigRepository;
 use codebase_notebook_lib::domain::services::{
     ChatTurn, EmbeddingProvider, LlmProvider, ProviderRouter,
 };
+use codebase_notebook_lib::infrastructure::indexing::git::GitCliCloner;
 use codebase_notebook_lib::infrastructure::indexing::scanner::FsSourceScanner;
 use codebase_notebook_lib::infrastructure::persistence::chat_repo::SqliteChatRepository;
 use codebase_notebook_lib::infrastructure::persistence::document_repo::SqliteDocumentRepository;
 use codebase_notebook_lib::infrastructure::persistence::provider_repo::SqliteProviderConfigRepository;
+use codebase_notebook_lib::infrastructure::persistence::repository_repo::SqliteRepositoryRepository;
 use codebase_notebook_lib::infrastructure::persistence::workspace_repo::SqliteWorkspaceRepository;
 use codebase_notebook_lib::infrastructure::persistence::Db;
 use codebase_notebook_lib::infrastructure::secrets::scanner::RegexSecretScanner;
@@ -68,6 +71,7 @@ struct Harness {
     _tmp: tempdir::TempDir,
     workspace_id: String,
     workspaces: WorkspaceUseCases,
+    repositories: RepositoryUseCases,
     chats: ChatUseCases,
     index: IndexWorkspaceUseCase,
     search: Arc<SearchUseCase>,
@@ -111,6 +115,7 @@ async fn setup() -> Harness {
 
     let db = Db::open(&tmp.path().join("test.sqlite")).unwrap();
     let workspace_repo = Arc::new(SqliteWorkspaceRepository::new(db.clone()));
+    let repository_repo = Arc::new(SqliteRepositoryRepository::new(db.clone()));
     let document_repo = Arc::new(SqliteDocumentRepository::new(db.clone()));
     let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
     let provider_repo = Arc::new(SqliteProviderConfigRepository::new(db));
@@ -118,16 +123,27 @@ async fn setup() -> Harness {
     let search = Arc::new(SearchUseCase::new(document_repo.clone(), embedder.clone()));
 
     let workspaces = WorkspaceUseCases::new(workspace_repo.clone());
-    let workspace = workspaces
-        .create("demo", repo_dir.to_str().unwrap())
+    let workspace = workspaces.create("demo").unwrap();
+
+    let repositories = RepositoryUseCases::new(
+        workspace_repo.clone(),
+        repository_repo.clone(),
+        document_repo.clone(),
+        Arc::new(GitCliCloner),
+        tmp.path().join("clones"),
+    );
+    repositories
+        .add_local(&workspace.id, repo_dir.to_str().unwrap())
         .unwrap();
 
     Harness {
         workspace_id: workspace.id,
         workspaces,
+        repositories,
         chats: ChatUseCases::new(chat_repo.clone()),
         index: IndexWorkspaceUseCase::new(
             workspace_repo.clone(),
+            repository_repo,
             document_repo.clone(),
             Arc::new(FsSourceScanner),
             Arc::new(RegexSecretScanner::new()),
@@ -250,6 +266,56 @@ async fn external_provider_requires_consent() {
         .await
         .unwrap();
     assert!(!preparation.requires_consent);
+}
+
+#[tokio::test]
+async fn multiple_repositories_index_and_remove_independently() {
+    let h = setup().await;
+
+    // Second repository in the same workspace.
+    let second_dir = h._tmp.path().join("second");
+    std::fs::create_dir_all(&second_dir).unwrap();
+    std::fs::write(
+        second_dir.join("billing.md"),
+        "# Billing\n\nInvoices are generated nightly by the billing_cron job.",
+    )
+    .unwrap();
+    let second = h
+        .repositories
+        .add_local(&h.workspace_id, second_dir.to_str().unwrap())
+        .unwrap();
+
+    let report = h.index.execute(&h.workspace_id).await.unwrap();
+    assert_eq!(report.files_indexed, 3, "both repositories are indexed");
+
+    // Paths are prefixed with the repository name.
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "billing_cron invoices", 10)
+        .await
+        .unwrap();
+    assert!(hits.iter().any(|hit| hit.rel_path == "second/billing.md"));
+
+    // Duplicate repository names in one workspace are rejected.
+    let duplicate = h
+        .repositories
+        .add_local(&h.workspace_id, second_dir.to_str().unwrap());
+    assert!(matches!(duplicate, Err(DomainError::Validation(_))));
+
+    // Removing the repository removes its indexed data, not the other repo's.
+    h.repositories.remove(&second.id).unwrap();
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "billing_cron invoices", 10)
+        .await
+        .unwrap();
+    assert!(hits.iter().all(|hit| !hit.rel_path.starts_with("second/")));
+    let still = h
+        .search
+        .execute(&h.workspace_id, "validate_token", 10)
+        .await
+        .unwrap();
+    assert!(!still.is_empty());
 }
 
 #[tokio::test]

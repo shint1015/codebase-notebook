@@ -6,6 +6,7 @@ use crate::application::usecases::index::IndexReport;
 use crate::domain::entities::chat::{ChatSession, Message};
 use crate::domain::entities::chunk::SearchHit;
 use crate::domain::entities::provider::{ProviderConfig, ProviderKind};
+use crate::domain::entities::repository::Repository;
 use crate::domain::entities::workspace::Workspace;
 use crate::domain::error::DomainError;
 
@@ -55,17 +56,52 @@ pub fn list_workspaces(state: State<'_, AppState>) -> CommandResult<Vec<Workspac
 }
 
 #[tauri::command]
-pub fn create_workspace(
-    state: State<'_, AppState>,
-    name: String,
-    root_path: String,
-) -> CommandResult<Workspace> {
-    Ok(state.workspaces.create(&name, &root_path)?)
+pub fn create_workspace(state: State<'_, AppState>, name: String) -> CommandResult<Workspace> {
+    Ok(state.workspaces.create(&name)?)
 }
 
 #[tauri::command]
 pub fn delete_workspace(state: State<'_, AppState>, workspace_id: String) -> CommandResult<()> {
-    Ok(state.workspaces.delete(&workspace_id)?)
+    state.workspaces.delete(&workspace_id)?;
+    // Cloned repositories owned by the app go away with their workspace.
+    state.repositories.remove_workspace_clones(&workspace_id)?;
+    Ok(())
+}
+
+// ---- repositories ----
+
+#[tauri::command]
+pub fn list_repositories(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> CommandResult<Vec<Repository>> {
+    Ok(state.repositories.list(&workspace_id)?)
+}
+
+#[tauri::command]
+pub fn add_local_repository(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    root_path: String,
+) -> CommandResult<Repository> {
+    Ok(state.repositories.add_local(&workspace_id, &root_path)?)
+}
+
+#[tauri::command]
+pub async fn add_git_repository(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    url: String,
+) -> CommandResult<Repository> {
+    Ok(state.repositories.add_from_git(&workspace_id, &url).await?)
+}
+
+#[tauri::command]
+pub fn delete_repository(
+    state: State<'_, AppState>,
+    repository_id: String,
+) -> CommandResult<()> {
+    Ok(state.repositories.remove(&repository_id)?)
 }
 
 #[tauri::command]

@@ -14,12 +14,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let db_path = app
-                .path()
-                .app_data_dir()
-                .expect("app data dir")
-                .join("codebase-notebook.sqlite");
-            let state = AppState::new(&db_path)
+            let data_dir = app.path().app_data_dir().expect("app data dir");
+            let db_path = data_dir.join("codebase-notebook.sqlite");
+            let clones_dir = data_dir.join("repos");
+            let state = AppState::new(&db_path, clones_dir)
                 .map_err(|e| format!("failed to initialize app state: {e}"))?;
             app.manage(state);
             Ok(())
@@ -29,6 +27,10 @@ pub fn run() {
             commands::create_workspace,
             commands::delete_workspace,
             commands::set_workspace_allow_external,
+            commands::list_repositories,
+            commands::add_local_repository,
+            commands::add_git_repository,
+            commands::delete_repository,
             commands::workspace_stats,
             commands::index_workspace,
             commands::search_workspace,
