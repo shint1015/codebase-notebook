@@ -7,6 +7,7 @@ import type {
   Message,
   ProviderConfig,
   ProviderKind,
+  Repository,
   SearchHit,
   Workspace,
   WorkspaceStats,
@@ -14,10 +15,19 @@ import type {
 
 export const api = {
   listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
-  createWorkspace: (name: string, rootPath: string) =>
-    invoke<Workspace>("create_workspace", { name, rootPath }),
+  createWorkspace: (name: string) =>
+    invoke<Workspace>("create_workspace", { name }),
   deleteWorkspace: (workspaceId: string) =>
     invoke<void>("delete_workspace", { workspaceId }),
+
+  listRepositories: (workspaceId: string) =>
+    invoke<Repository[]>("list_repositories", { workspaceId }),
+  addLocalRepository: (workspaceId: string, rootPath: string) =>
+    invoke<Repository>("add_local_repository", { workspaceId, rootPath }),
+  addGitRepository: (workspaceId: string, url: string) =>
+    invoke<Repository>("add_git_repository", { workspaceId, url }),
+  deleteRepository: (repositoryId: string) =>
+    invoke<void>("delete_repository", { repositoryId }),
   setWorkspaceAllowExternal: (workspaceId: string, allow: boolean) =>
     invoke<void>("set_workspace_allow_external", { workspaceId, allow }),
   workspaceStats: (workspaceId: string) =>

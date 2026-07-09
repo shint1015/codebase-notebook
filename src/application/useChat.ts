@@ -15,38 +15,30 @@ export interface PendingConsent {
   preparation: AskPreparation;
 }
 
-export function useChat(workspaceId: string | null) {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+/**
+ * Chat for one (workspace, session). `sessionId === null` means a new chat:
+ * the session is created on the first question and reported upward via
+ * `onSessionCreated` so navigation state stays in the parent.
+ */
+export function useChat(
+  workspaceId: string | null,
+  sessionId: string | null,
+  onSessionCreated: (session: ChatSession) => void,
+) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConsent, setPendingConsent] = useState<PendingConsent | null>(null);
 
   useEffect(() => {
-    setSessions([]);
-    setSessionId(null);
-    setMessages([]);
+    setError(null);
     setPendingConsent(null);
-    if (!workspaceId) return;
-    void api.listChatSessions(workspaceId).then((list) => {
-      setSessions(list);
-      setSessionId(list[0]?.id ?? null);
-    });
-  }, [workspaceId]);
-
-  useEffect(() => {
     if (!sessionId) {
       setMessages([]);
       return;
     }
     void api.listChatMessages(sessionId).then(setMessages);
   }, [sessionId]);
-
-  const selectSession = useCallback((id: string) => {
-    setSessionId(id);
-    setPendingConsent(null);
-  }, []);
 
   const ensureSession = useCallback(
     async (firstQuestion: string): Promise<string> => {
@@ -56,11 +48,10 @@ export function useChat(workspaceId: string | null) {
         workspaceId,
         firstQuestion.slice(0, 60),
       );
-      setSessions((prev) => [session, ...prev]);
-      setSessionId(session.id);
+      onSessionCreated(session);
       return session.id;
     },
-    [sessionId, workspaceId],
+    [sessionId, workspaceId, onSessionCreated],
   );
 
   const runAsk = useCallback(
@@ -128,13 +119,6 @@ export function useChat(workspaceId: string | null) {
   );
 
   return {
-    sessions,
-    sessionId,
-    selectSession,
-    startNewSession: () => {
-      setSessionId(null);
-      setMessages([]);
-    },
     messages,
     busy,
     error,

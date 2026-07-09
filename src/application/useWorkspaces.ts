@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../infrastructure/api";
-import type { IndexReport, Workspace } from "../domain/types";
+import type { Workspace } from "../domain/types";
 
 export function useWorkspaces() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [indexing, setIndexing] = useState(false);
-  const [lastReport, setLastReport] = useState<IndexReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -28,8 +26,8 @@ export function useWorkspaces() {
   }, [refresh]);
 
   const create = useCallback(
-    async (name: string, rootPath: string) => {
-      const workspace = await api.createWorkspace(name, rootPath);
+    async (name: string) => {
+      const workspace = await api.createWorkspace(name);
       await refresh();
       setSelectedId(workspace.id);
       return workspace;
@@ -40,27 +38,6 @@ export function useWorkspaces() {
   const remove = useCallback(
     async (id: string) => {
       await api.deleteWorkspace(id);
-      setLastReport(null);
-      await refresh();
-    },
-    [refresh],
-  );
-
-  const index = useCallback(async (id: string) => {
-    setIndexing(true);
-    setError(null);
-    try {
-      const report = await api.indexWorkspace(id);
-      setLastReport(report);
-      return report;
-    } finally {
-      setIndexing(false);
-    }
-  }, []);
-
-  const setAllowExternal = useCallback(
-    async (id: string, allow: boolean) => {
-      await api.setWorkspaceAllowExternal(id, allow);
       await refresh();
     },
     [refresh],
@@ -75,10 +52,6 @@ export function useWorkspaces() {
     setSelectedId,
     create,
     remove,
-    index,
-    indexing,
-    lastReport,
-    setAllowExternal,
     error,
     refresh,
   };

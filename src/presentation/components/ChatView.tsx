@@ -1,17 +1,31 @@
 import { useEffect, useRef, useState } from "react";
-import type { ProviderConfig, ProviderKind, Workspace } from "../../domain/types";
+import type {
+  ChatSession,
+  ProviderConfig,
+  ProviderKind,
+  Workspace,
+} from "../../domain/types";
 import { EXTERNAL_PROVIDERS, PROVIDER_LABELS } from "../../domain/types";
 import { useChat } from "../../application/useChat";
 import { ConsentDialog } from "./ConsentDialog";
 import { MessageBubble } from "./MessageBubble";
 
 interface Props {
-  workspace: Workspace | null;
+  workspace: Workspace;
+  session: ChatSession | null;
   providers: ProviderConfig[];
+  onSessionCreated: (session: ChatSession) => void;
+  onBack: () => void;
 }
 
-export function ChatView({ workspace, providers }: Props) {
-  const chat = useChat(workspace?.id ?? null);
+export function ChatView({
+  workspace,
+  session,
+  providers,
+  onSessionCreated,
+  onBack,
+}: Props) {
+  const chat = useChat(workspace.id, session?.id ?? null, onSessionCreated);
   const [input, setInput] = useState("");
   const [provider, setProvider] = useState<ProviderKind>("ollama");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,14 +42,6 @@ export function ChatView({ workspace, providers }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages.length, chat.busy]);
 
-  if (!workspace) {
-    return (
-      <main className="chat-empty">
-        <p>Select or add a workspace to start.</p>
-      </main>
-    );
-  }
-
   const submit = async () => {
     const question = input;
     setInput("");
@@ -45,23 +51,14 @@ export function ChatView({ workspace, providers }: Props) {
   return (
     <main className="chat">
       <header className="chat-header">
-        <div>
-          <h2>{workspace.name}</h2>
-          <span className="workspace-path">{workspace.root_path}</span>
-        </div>
-        <div className="session-controls">
-          <select
-            value={chat.sessionId ?? ""}
-            onChange={(e) => e.target.value && chat.selectSession(e.target.value)}
-          >
-            <option value="">— new chat —</option>
-            {chat.sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-          <button onClick={chat.startNewSession}>New chat</button>
+        <div className="chat-title">
+          <button onClick={onBack} title="Back to workspace">
+            ←
+          </button>
+          <div>
+            <h2>{session?.title ?? "New chat"}</h2>
+            <span className="workspace-path">{workspace.name}</span>
+          </div>
         </div>
       </header>
 

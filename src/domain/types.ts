@@ -3,8 +3,16 @@
 export interface Workspace {
   id: string;
   name: string;
-  root_path: string;
   allow_external: boolean;
+  created_at: string;
+}
+
+export interface Repository {
+  id: string;
+  workspace_id: string;
+  name: string;
+  root_path: string;
+  remote_url: string | null;
   created_at: string;
 }
 
