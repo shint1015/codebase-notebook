@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Local HTTP API on `127.0.0.1:43110` for editor integrations — token
+  protected (token file in the app data dir) and restricted to the local
+  provider, so it can never trigger an external send.
+- VS Code extension (`vscode-extension/`): ask about the current selection or
+  the whole workspace; cited answers open as a markdown preview.
+- GitHub Actions CI: frontend type-check/build, Rust tests and extension
+  compile on pushes and pull requests.
+
 ## [0.5.0] - 2026-07-09
 
 ### Added
