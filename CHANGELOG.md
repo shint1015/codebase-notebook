@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Sidebar now shows the selected workspace's chat list (with "+ New chat")
+  and can be collapsed to an icon rail; the model provider selector moved to
+  the top-right of the chat view.
+
 ### Added
 
 - Asking in a workspace with no indexed sources now returns a clear

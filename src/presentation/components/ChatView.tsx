@@ -60,6 +60,19 @@ export function ChatView({
             <span className="workspace-path">{workspace.name}</span>
           </div>
         </div>
+        <select
+          className="provider-select"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as ProviderKind)}
+          title="Model provider for this chat"
+        >
+          {enabled.map((p) => (
+            <option key={p.kind} value={p.kind}>
+              {PROVIDER_LABELS[p.kind]}
+              {EXTERNAL_PROVIDERS.includes(p.kind) ? " ↗" : ""}
+            </option>
+          ))}
+        </select>
       </header>
 
       <div className="messages">
@@ -79,18 +92,6 @@ export function ChatView({
       </div>
 
       <footer className="composer">
-        <select
-          value={provider}
-          onChange={(e) => setProvider(e.target.value as ProviderKind)}
-          title="Model provider for this question"
-        >
-          {enabled.map((p) => (
-            <option key={p.kind} value={p.kind}>
-              {PROVIDER_LABELS[p.kind]}
-              {EXTERNAL_PROVIDERS.includes(p.kind) ? " ↗" : ""}
-            </option>
-          ))}
-        </select>
         <textarea
           value={input}
           placeholder="Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"
