@@ -958,8 +958,10 @@ textarea:focus {
   z-index: 2;
 }
 
-.message:hover .message-actions,
-.message:focus-within .message-actions {
+/* Trigger on the whole row so the icons — which sit just outside the bubble —
+   stay visible and reachable while hovering (no hover gap). */
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
   opacity: 1;
 }
 
