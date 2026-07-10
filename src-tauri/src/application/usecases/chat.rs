@@ -32,9 +32,15 @@ impl ChatUseCases {
         self.chats.list_sessions(workspace_id)
     }
 
-    /// Duplicate a session and all its messages into a new one, so the user
-    /// can branch a conversation without disturbing the original.
-    pub fn fork_session(&self, session_id: &str) -> DomainResult<ChatSession> {
+    /// Duplicate a session into a new one so the user can branch a
+    /// conversation without disturbing the original. When `up_to_message_id`
+    /// is given, only messages up to and including that one are copied — this
+    /// branches the conversation from a chosen point.
+    pub fn fork_session(
+        &self,
+        session_id: &str,
+        up_to_message_id: Option<&str>,
+    ) -> DomainResult<ChatSession> {
         let source = self.chats.find_session(session_id)?;
         let title: String = format!("{} (fork)", source.title)
             .chars()
@@ -48,12 +54,16 @@ impl ChatUseCases {
         };
         self.chats.create_session(&forked)?;
         for message in self.chats.list_messages(session_id)? {
+            let stop = up_to_message_id == Some(message.id.as_str());
             let copy = Message {
                 id: uuid::Uuid::new_v4().to_string(),
                 session_id: forked.id.clone(),
                 ..message
             };
             self.chats.append_message(&copy)?;
+            if stop {
+                break;
+            }
         }
         Ok(forked)
     }
