@@ -922,6 +922,8 @@ textarea:focus {
 .message-row {
   display: flex;
   flex-direction: column;
+  /* reserve space for the hover actions that sit just below the bubble */
+  margin-bottom: 14px;
 }
 
 .message-row.user {
@@ -943,8 +945,8 @@ textarea:focus {
 
 .message-actions {
   position: absolute;
-  top: -12px;
-  right: 8px;
+  bottom: -26px;
+  right: 0;
   display: flex;
   gap: 2px;
   background: var(--bg);
@@ -1002,6 +1004,7 @@ textarea:focus {
 .model-tag {
   font-size: 10px;
   color: var(--text-dim);
+  align-self: flex-end;
 }
 
 .citations {
