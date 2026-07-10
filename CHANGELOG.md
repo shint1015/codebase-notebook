@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent tools: search_sources (read), create_github_issue and write_wiki_page
   (write). Works with local Ollama (qwen2.5-coder) and OpenAI-compatible
   providers; tool calls emitted in message content are recovered.
+- External service connectors as agent tools: Slack (post message), Notion
+  (create page), Asana (create task), Backlog (create issue) and Confluence
+  (create page). Tokens are stored in the OS keychain and each action is
+  gated behind the per-message write approval. Connect them in Settings.
 
 ## [0.6.0] - 2026-07-09
 
