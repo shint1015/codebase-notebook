@@ -17,6 +17,8 @@ interface Props {
   session: ChatSession | null;
   providers: ProviderConfig[];
   onSessionCreated: (session: ChatSession) => void;
+  onForked: (session: ChatSession) => void;
+  onDocumentized: () => void;
   onBack: () => void;
 }
 
@@ -25,6 +27,8 @@ export function ChatView({
   session,
   providers,
   onSessionCreated,
+  onForked,
+  onDocumentized,
   onBack,
 }: Props) {
   const chat = useChat(workspace.id, session?.id ?? null, onSessionCreated);
@@ -46,10 +50,36 @@ export function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages.length, chat.busy, chat.streamingText]);
 
+  const [actionStatus, setActionStatus] = useState<string | null>(null);
+
   const submit = async () => {
     const question = input;
     setInput("");
     await chat.send(question, provider, agentMode, agentMode && allowWrites);
+  };
+
+  const fork = async () => {
+    if (!session) return;
+    const forked = await api.forkChatSession(session.id);
+    onForked(forked);
+  };
+
+  const copy = async () => {
+    if (!session) return;
+    const md = await api.chatMarkdown(session.id);
+    await navigator.clipboard.writeText(md);
+    setActionStatus("Copied to clipboard");
+    setTimeout(() => setActionStatus(null), 2000);
+  };
+
+  const documentize = async () => {
+    if (!session) return;
+    const title = prompt("Save chat as document — title:", session.title);
+    if (!title) return;
+    await api.chatToDocument(workspace.id, session.id, title);
+    setActionStatus("Saved as document");
+    setTimeout(() => setActionStatus(null), 2000);
+    onDocumentized();
   };
 
   return (
@@ -65,19 +95,31 @@ export function ChatView({
           </div>
         </div>
         <div className="chat-header-actions">
+          {actionStatus && <span className="action-status">{actionStatus}</span>}
           {session && chat.messages.length > 0 && (
-            <button
-              title="Export chat as markdown"
-              onClick={async () => {
-                const dest = await save({
-                  defaultPath: `${session.title.slice(0, 40)}.md`,
-                  filters: [{ name: "Markdown", extensions: ["md"] }],
-                });
-                if (dest) await api.exportChat(session.id, dest);
-              }}
-            >
-              ⤓ Export
-            </button>
+            <>
+              <button title="Duplicate this chat into a new one" onClick={() => void fork()}>
+                ⑂ Fork
+              </button>
+              <button title="Copy transcript to clipboard" onClick={() => void copy()}>
+                ⧉ Copy
+              </button>
+              <button title="Save chat as an in-app document" onClick={() => void documentize()}>
+                ▤ Save as doc
+              </button>
+              <button
+                title="Export chat as a markdown file"
+                onClick={async () => {
+                  const dest = await save({
+                    defaultPath: `${session.title.slice(0, 40)}.md`,
+                    filters: [{ name: "Markdown", extensions: ["md"] }],
+                  });
+                  if (dest) await api.exportChat(session.id, dest);
+                }}
+              >
+                ⤓ Export
+              </button>
+            </>
           )}
           <select
             className="provider-select"
