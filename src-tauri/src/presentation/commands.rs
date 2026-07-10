@@ -434,6 +434,44 @@ pub async fn pull_ollama_model(
     Ok(admin.pull(&model, &sink).await?)
 }
 
+// ---- notes / in-app documents ----
+
+#[tauri::command]
+pub fn list_notes(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> CommandResult<Vec<crate::application::usecases::notes::NoteFile>> {
+    Ok(state.notes.list(&workspace_id)?)
+}
+
+#[tauri::command]
+pub fn read_note(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    name: String,
+) -> CommandResult<String> {
+    Ok(state.notes.read(&workspace_id, &name)?)
+}
+
+#[tauri::command]
+pub fn save_note(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    name: String,
+    content: String,
+) -> CommandResult<String> {
+    Ok(state.notes.save(&workspace_id, &name, &content)?)
+}
+
+#[tauri::command]
+pub fn delete_note(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    name: String,
+) -> CommandResult<()> {
+    Ok(state.notes.delete(&workspace_id, &name)?)
+}
+
 // ---- connectors ----
 
 #[derive(Debug, Serialize)]

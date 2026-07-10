@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- In-app markdown documents: create and edit notes inside the app. Each
+  workspace has a "notes" source; documents are indexed and citable like any
+  other source (re-indexed on save).
+- Document editor with live preview — split view (editor + rendered markdown
+  side by side) or Edit / Preview tabs. Cmd/Ctrl+S saves.
+
 ## [0.7.0] - 2026-07-10
 
 ### Added

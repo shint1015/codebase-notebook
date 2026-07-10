@@ -38,6 +38,7 @@ pub const EMBEDDING_MODEL: &str = "nomic-embed-text";
 pub struct AppState {
     pub workspaces: WorkspaceUseCases,
     pub repositories: RepositoryUseCases,
+    pub notes: crate::application::usecases::notes::NotesUseCases,
     pub publish: Arc<PublishUseCases>,
     pub chats: ChatUseCases,
     pub providers: ProviderUseCases,
@@ -139,6 +140,12 @@ impl AppState {
             )),
         ];
 
+        let notes = crate::application::usecases::notes::NotesUseCases::new(
+            workspace_repo.clone(),
+            repository_repo.clone(),
+            clones_dir.clone(),
+        );
+
         Ok(Self {
             workspaces: WorkspaceUseCases::new(workspace_repo.clone()),
             repositories: RepositoryUseCases::new(
@@ -150,6 +157,7 @@ impl AppState {
                 issue_service.clone(),
                 clones_dir,
             ),
+            notes,
             publish: publish.clone(),
             repository_reader: repository_repo.clone(),
             chats: ChatUseCases::new(chat_repo.clone()),
