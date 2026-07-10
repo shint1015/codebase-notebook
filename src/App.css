@@ -919,12 +919,61 @@ textarea:focus {
   line-height: 1.8;
 }
 
+.message-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-row.user {
+  align-items: flex-end;
+}
+
+.message-row.assistant {
+  align-items: flex-start;
+}
+
 .message {
+  position: relative;
   max-width: 78%;
   padding: 12px 14px;
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.55;
+}
+
+.message-actions {
+  position: absolute;
+  top: -12px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 2;
+}
+
+.message:hover .message-actions,
+.message:focus-within .message-actions {
+  opacity: 1;
+}
+
+.message-actions button {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  line-height: 1;
+}
+
+.message-actions button:hover {
+  background: var(--bg-raised);
+  color: var(--text);
 }
 
 .message.user {

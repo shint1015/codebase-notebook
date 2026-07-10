@@ -7,15 +7,33 @@ import { api } from "../../infrastructure/api";
 export function MessageBubble({
   message,
   workspaceId,
+  onFork,
 }: {
   message: Message;
   workspaceId: string;
+  /** Fork the conversation up to and including this message. */
+  onFork: (messageId: string) => void;
 }) {
   const [openCitation, setOpenCitation] = useState<number | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
     <div className={`message ${message.role}`}>
+      <div className="message-actions">
+        <button title={copied ? "Copied" : "Copy message"} onClick={() => void copy()}>
+          {copied ? "✓" : "⧉"}
+        </button>
+        <button title="Fork the chat from here" onClick={() => onFork(message.id)}>
+          ⑂
+        </button>
+      </div>
       {message.role === "assistant" ? (
         <div className="message-content markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>

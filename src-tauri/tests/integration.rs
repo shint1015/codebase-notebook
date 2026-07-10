@@ -592,7 +592,7 @@ async fn forking_a_chat_duplicates_its_messages() {
             .unwrap();
     }
 
-    let forked = h.chats.fork_session(&session.id).unwrap();
+    let forked = h.chats.fork_session(&session.id, None).unwrap();
     assert_ne!(forked.id, session.id);
     assert_eq!(forked.title, "original (fork)");
     assert_eq!(forked.workspace_id, h.workspace_id);
@@ -604,7 +604,16 @@ async fn forking_a_chat_duplicates_its_messages() {
     // Copied messages get fresh ids.
     assert_ne!(forked_msgs[0].id, original_msgs[0].id);
 
-    // The two chats are independent now.
+    // Forking up to the first message only copies that one (branch point).
+    let branch = h
+        .chats
+        .fork_session(&session.id, Some(&original_msgs[0].id))
+        .unwrap();
+    let branch_msgs = h.chats.list_messages(&branch.id).unwrap();
+    assert_eq!(branch_msgs.len(), 1);
+    assert_eq!(branch_msgs[0].content, "hi");
+
+    // The chats are independent now.
     let listed = h.chats.list_sessions(&h.workspace_id).unwrap();
     assert!(listed.iter().any(|s| s.id == session.id));
     assert!(listed.iter().any(|s| s.id == forked.id));

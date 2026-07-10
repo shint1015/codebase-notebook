@@ -58,9 +58,9 @@ export function ChatView({
     await chat.send(question, provider, agentMode, agentMode && allowWrites);
   };
 
-  const fork = async () => {
+  const fork = async (upToMessageId?: string) => {
     if (!session) return;
-    const forked = await api.forkChatSession(session.id);
+    const forked = await api.forkChatSession(session.id, upToMessageId);
     onForked(forked);
   };
 
@@ -98,10 +98,7 @@ export function ChatView({
           {actionStatus && <span className="action-status">{actionStatus}</span>}
           {session && chat.messages.length > 0 && (
             <>
-              <button title="Duplicate this chat into a new one" onClick={() => void fork()}>
-                ⑂ Fork
-              </button>
-              <button title="Copy transcript to clipboard" onClick={() => void copy()}>
+              <button title="Copy the whole transcript" onClick={() => void copy()}>
                 ⧉ Copy
               </button>
               <button title="Save chat as an in-app document" onClick={() => void documentize()}>
@@ -146,7 +143,7 @@ export function ChatView({
           </div>
         )}
         {chat.messages.map((m) => (
-          <div key={m.id}>
+          <div key={m.id} className={`message-row ${m.role}`}>
             {chat.toolEvents[m.id] && (
               <div className="tool-trace">
                 {chat.toolEvents[m.id].map((event, i) => (
@@ -161,7 +158,11 @@ export function ChatView({
                 ))}
               </div>
             )}
-            <MessageBubble message={m} workspaceId={workspace.id} />
+            <MessageBubble
+              message={m}
+              workspaceId={workspace.id}
+              onFork={(messageId) => void fork(messageId)}
+            />
           </div>
         ))}
         {chat.streamingText !== null &&

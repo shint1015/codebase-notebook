@@ -71,8 +71,8 @@ export const api = {
     invoke<void>("delete_chat_session", { sessionId }),
   exportChat: (sessionId: string, destPath: string) =>
     invoke<void>("export_chat", { sessionId, destPath }),
-  forkChatSession: (sessionId: string) =>
-    invoke<ChatSession>("fork_chat_session", { sessionId }),
+  forkChatSession: (sessionId: string, upToMessageId?: string) =>
+    invoke<ChatSession>("fork_chat_session", { sessionId, upToMessageId }),
   chatMarkdown: (sessionId: string) =>
     invoke<string>("chat_markdown", { sessionId }),
   chatToDocument: (workspaceId: string, sessionId: string, title: string) =>

@@ -320,8 +320,11 @@ pub fn export_chat(
 pub fn fork_chat_session(
     state: State<'_, AppState>,
     session_id: String,
+    up_to_message_id: Option<String>,
 ) -> CommandResult<ChatSession> {
-    Ok(state.chats.fork_session(&session_id)?)
+    Ok(state
+        .chats
+        .fork_session(&session_id, up_to_message_id.as_deref())?)
 }
 
 /// Chat transcript as markdown (for "Copy").
