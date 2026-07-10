@@ -24,6 +24,11 @@ struct AskRequest {
     question: String,
     #[serde(default)]
     session_id: Option<String>,
+    /// When true, the agent (tools) is used; writes still need `allow_writes`.
+    #[serde(default)]
+    agent: bool,
+    #[serde(default)]
+    allow_writes: bool,
 }
 
 #[derive(Deserialize)]
@@ -32,6 +37,27 @@ struct SearchRequest {
     query: String,
     #[serde(default)]
     limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceRequest {
+    workspace_id: String,
+}
+
+#[derive(Deserialize)]
+struct NoteRequest {
+    workspace_id: String,
+    title: String,
+    #[serde(default)]
+    content: String,
+}
+
+/// Extract a query-string parameter (e.g. `?workspace_id=abc`).
+fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    query.split('&').find_map(|pair| {
+        let (k, v) = pair.split_once('=')?;
+        (k == key).then_some(v)
+    })
 }
 
 /// Load (or create) the API token under the app data dir.
@@ -70,10 +96,11 @@ pub fn start(handle: tauri::AppHandle, token: String) {
 
 fn respond(handle: tauri::AppHandle, token: &str, mut request: tiny_http::Request) {
     let url = request.url().to_string();
+    let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
     let method = request.method().to_string();
 
-    if url == "/health" {
-        reply_json(request, 200, json!({"ok": true}));
+    if path == "/health" {
+        reply_json(request, 200, json!({"ok": true, "app": "codebase-notebook"}));
         return;
     }
 
@@ -92,24 +119,60 @@ fn respond(handle: tauri::AppHandle, token: &str, mut request: tiny_http::Reques
     request.as_reader().read_to_string(&mut body).ok();
     let state = handle.state::<AppState>();
 
-    let result: Result<serde_json::Value, (u16, String)> = match (method.as_str(), url.as_str()) {
+    let result: Result<serde_json::Value, (u16, String)> = match (method.as_str(), path) {
         ("GET", "/api/workspaces") => state
             .workspaces
             .list()
             .map(|list| serde_json::to_value(list).unwrap_or_default())
             .map_err(internal),
-        ("POST", "/api/search") => match serde_json::from_str::<SearchRequest>(&body) {
-            Ok(input) => tauri::async_runtime::block_on(state.search.execute(
+
+        ("GET", "/api/sessions") => match query_param(query, "workspace_id") {
+            Some(workspace_id) => state
+                .chats
+                .list_sessions(workspace_id)
+                .map(|list| serde_json::to_value(list).unwrap_or_default())
+                .map_err(internal),
+            None => Err((400, "workspace_id query param required".into())),
+        },
+
+        ("GET", "/api/notes") => match query_param(query, "workspace_id") {
+            Some(workspace_id) => state
+                .notes
+                .list(workspace_id)
+                .map(|list| serde_json::to_value(list).unwrap_or_default())
+                .map_err(internal),
+            None => Err((400, "workspace_id query param required".into())),
+        },
+
+        ("POST", "/api/search") => parse::<SearchRequest>(&body).and_then(|input| {
+            tauri::async_runtime::block_on(state.search.execute(
                 &input.workspace_id,
                 &input.query,
                 input.limit.unwrap_or(10),
             ))
             .map(|hits| serde_json::to_value(hits).unwrap_or_default())
-            .map_err(internal),
-            Err(error) => Err((400, format!("bad request: {error}"))),
-        },
-        ("POST", "/api/ask") => match serde_json::from_str::<AskRequest>(&body) {
-            Ok(input) => tauri::async_runtime::block_on(async {
+            .map_err(internal)
+        }),
+
+        ("POST", "/api/index") => parse::<WorkspaceRequest>(&body).and_then(|input| {
+            tauri::async_runtime::block_on(state.index.execute(&input.workspace_id))
+                .map(|report| serde_json::to_value(report).unwrap_or_default())
+                .map_err(internal)
+        }),
+
+        ("POST", "/api/notes") => parse::<NoteRequest>(&body).and_then(|input| {
+            // Save then re-index so the new note is immediately searchable.
+            let name = state
+                .notes
+                .save(&input.workspace_id, &input.title, &input.content)
+                .map_err(internal)?;
+            tauri::async_runtime::block_on(state.index.execute(&input.workspace_id))
+                .map_err(internal)?;
+            Ok(json!({"name": name}))
+        }),
+
+        ("POST", "/api/ask") => parse::<AskRequest>(&body).and_then(|input| {
+            tauri::async_runtime::block_on(async {
                 let session_id = match &input.session_id {
                     Some(session_id) => session_id.clone(),
                     None => {
@@ -119,21 +182,36 @@ fn respond(handle: tauri::AppHandle, token: &str, mut request: tiny_http::Reques
                             .id
                     }
                 };
-                let message = state
-                    .ask
-                    .execute(
-                        &session_id,
-                        &input.workspace_id,
-                        &input.question,
-                        ProviderKind::Ollama,
-                        false,
-                    )
-                    .await?;
-                Ok(json!({"session_id": session_id, "message": message}))
+                if input.agent {
+                    let outcome = state
+                        .agent
+                        .run(
+                            &session_id,
+                            &input.workspace_id,
+                            &input.question,
+                            ProviderKind::Ollama,
+                            input.allow_writes,
+                        )
+                        .await?;
+                    Ok(json!({"session_id": session_id, "message": outcome.message,
+                              "tool_events": outcome.tool_events}))
+                } else {
+                    let message = state
+                        .ask
+                        .execute(
+                            &session_id,
+                            &input.workspace_id,
+                            &input.question,
+                            ProviderKind::Ollama,
+                            false,
+                        )
+                        .await?;
+                    Ok(json!({"session_id": session_id, "message": message}))
+                }
             })
-            .map_err(internal),
-            Err(error) => Err((400, format!("bad request: {error}"))),
-        },
+            .map_err(internal)
+        }),
+
         _ => Err((404, "not found".to_string())),
     };
 
@@ -141,6 +219,10 @@ fn respond(handle: tauri::AppHandle, token: &str, mut request: tiny_http::Reques
         Ok(value) => reply_json(request, 200, value),
         Err((status, message)) => reply_json(request, status, json!({"error": message})),
     }
+}
+
+fn parse<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, (u16, String)> {
+    serde_json::from_str(body).map_err(|e| (400, format!("bad request: {e}")))
 }
 
 fn internal(error: crate::domain::error::DomainError) -> (u16, String) {
