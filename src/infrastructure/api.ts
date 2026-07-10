@@ -99,6 +99,15 @@ export const api = {
     return invoke<void>("pull_ollama_model", { model, onProgress: channel });
   },
 
+  listNotes: (workspaceId: string) =>
+    invoke<{ name: string; updated_at: string }[]>("list_notes", { workspaceId }),
+  readNote: (workspaceId: string, name: string) =>
+    invoke<string>("read_note", { workspaceId, name }),
+  saveNote: (workspaceId: string, name: string, content: string) =>
+    invoke<string>("save_note", { workspaceId, name, content }),
+  deleteNote: (workspaceId: string, name: string) =>
+    invoke<void>("delete_note", { workspaceId, name }),
+
   listConnectors: () =>
     invoke<{ name: string; connected: boolean }[]>("list_connectors"),
   setConnectorToken: (connector: string, token: string) =>
