@@ -922,6 +922,8 @@ textarea:focus {
 .message-row {
   display: flex;
   flex-direction: column;
+  /* reserve space for the hover actions that sit just below the bubble */
+  margin-bottom: 14px;
 }
 
 .message-row.user {
@@ -943,8 +945,8 @@ textarea:focus {
 
 .message-actions {
   position: absolute;
-  top: -12px;
-  right: 8px;
+  bottom: -26px;
+  right: 0;
   display: flex;
   gap: 2px;
   background: var(--bg);
@@ -956,8 +958,10 @@ textarea:focus {
   z-index: 2;
 }
 
-.message:hover .message-actions,
-.message:focus-within .message-actions {
+/* Trigger on the whole row so the icons — which sit just outside the bubble —
+   stay visible and reachable while hovering (no hover gap). */
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
   opacity: 1;
 }
 
@@ -1002,6 +1006,7 @@ textarea:focus {
 .model-tag {
   font-size: 10px;
   color: var(--text-dim);
+  align-self: flex-end;
 }
 
 .citations {
