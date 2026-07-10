@@ -228,6 +228,11 @@ body {
   gap: 8px;
 }
 
+.action-status {
+  font-size: 11px;
+  color: var(--accent);
+}
+
 /* markdown answers */
 
 /* Rendered markdown manages its own block spacing — not pre-wrap, or the

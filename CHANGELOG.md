@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Chat actions in the chat header: **Fork** (duplicate the conversation into a
+  new chat to branch it), **Copy** (transcript to the clipboard), and **Save
+  as doc** (store the chat as an in-app markdown document, then re-index).
+
 ## [0.8.0] - 2026-07-10
 
 ### Added

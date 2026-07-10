@@ -98,6 +98,11 @@ function App() {
             setView({ kind: "chat", session });
             void sessions.refresh();
           }}
+          onForked={(session) => {
+            void sessions.refresh();
+            setView({ kind: "chat", session });
+          }}
+          onDocumentized={() => void api.indexWorkspace(ws.selected!.id)}
           onBack={() => setView({ kind: "home" })}
         />
       )}

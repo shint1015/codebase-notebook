@@ -32,6 +32,32 @@ impl ChatUseCases {
         self.chats.list_sessions(workspace_id)
     }
 
+    /// Duplicate a session and all its messages into a new one, so the user
+    /// can branch a conversation without disturbing the original.
+    pub fn fork_session(&self, session_id: &str) -> DomainResult<ChatSession> {
+        let source = self.chats.find_session(session_id)?;
+        let title: String = format!("{} (fork)", source.title)
+            .chars()
+            .take(80)
+            .collect();
+        let forked = ChatSession {
+            id: uuid::Uuid::new_v4().to_string(),
+            workspace_id: source.workspace_id,
+            title,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        self.chats.create_session(&forked)?;
+        for message in self.chats.list_messages(session_id)? {
+            let copy = Message {
+                id: uuid::Uuid::new_v4().to_string(),
+                session_id: forked.id.clone(),
+                ..message
+            };
+            self.chats.append_message(&copy)?;
+        }
+        Ok(forked)
+    }
+
     pub fn rename_session(&self, session_id: &str, title: &str) -> DomainResult<()> {
         let title = title.trim();
         if title.is_empty() {
