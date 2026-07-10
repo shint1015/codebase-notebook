@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Agent mode in chat: the model can call tools to search sources and take
+  actions. Enable "Agent mode" in the composer; write actions require the
+  per-message "Allow actions" opt-in (safe by default). Tool calls are shown
+  as a trace above the answer.
+- Agent tools: search_sources (read), create_github_issue and write_wiki_page
+  (write). Works with local Ollama (qwen2.5-coder) and OpenAI-compatible
+  providers; tool calls emitted in message content are recovered.
+
 ## [0.6.0] - 2026-07-09
 
 ### Added

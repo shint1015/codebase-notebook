@@ -31,8 +31,77 @@ export function SettingsView({ providers, onConfigure, onTest, onClose }: Props)
           <ProviderCard key={p.kind} config={p} onConfigure={onConfigure} onTest={onTest} />
         ))}
         <SearchSettingsCard />
+        <ConnectorsCard />
         <UsageCard />
       </div>
+    </div>
+  );
+}
+
+const CONNECTOR_LABELS: Record<string, string> = {
+  slack: "Slack (bot token xoxb-…)",
+  notion: "Notion (integration token)",
+  asana: "Asana (personal access token)",
+  backlog: "Backlog (apiKey — see below)",
+  confluence: "Confluence (email:api_token or token)",
+};
+
+function ConnectorsCard() {
+  const [connectors, setConnectors] = useState<
+    { name: string; connected: boolean }[]
+  >([]);
+  const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState<string | null>(null);
+
+  const refresh = () => void api.listConnectors().then(setConnectors);
+  useEffect(refresh, []);
+
+  const save = async (name: string) => {
+    setStatus(null);
+    try {
+      await api.setConnectorToken(name, tokens[name] ?? "");
+      setTokens((prev) => ({ ...prev, [name]: "" }));
+      refresh();
+      setStatus(`${name} saved.`);
+    } catch (e) {
+      setStatus(isCommandError(e) ? e.message : String(e));
+    }
+  };
+
+  return (
+    <div className="provider-card">
+      <div className="provider-title">
+        <strong>Connectors</strong>
+        <span className="badge external">agent tools ↗</span>
+      </div>
+      <p className="settings-note">
+        Connect external services so the agent can act on them (post to Slack,
+        create Notion/Confluence pages, file Asana/Backlog tasks). Tokens are
+        stored in the OS keychain. Every action still needs your per-message
+        approval in Agent mode.
+      </p>
+      {connectors.map((c) => (
+        <div className="connector-row" key={c.name}>
+          <label>
+            {CONNECTOR_LABELS[c.name] ?? c.name}
+            {c.connected && <em> (connected)</em>}
+          </label>
+          <div className="connector-input">
+            <input
+              type="password"
+              value={tokens[c.name] ?? ""}
+              placeholder={c.connected ? "•••••• (leave blank to keep)" : "paste token"}
+              onChange={(e) =>
+                setTokens((prev) => ({ ...prev, [c.name]: e.target.value }))
+              }
+            />
+            <button onClick={() => void save(c.name)}>
+              {c.connected && !(tokens[c.name] ?? "").trim() ? "Disconnect" : "Save"}
+            </button>
+          </div>
+        </div>
+      ))}
+      {status && <span className="provider-status">{status}</span>}
     </div>
   );
 }

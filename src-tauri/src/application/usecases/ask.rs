@@ -128,10 +128,7 @@ impl AskUseCase {
             return question.to_string();
         };
         let mut turns = history;
-        turns.push(ChatTurn {
-            role: "user".to_string(),
-            content: question.to_string(),
-        });
+        turns.push(ChatTurn::user(question));
         let system = "Rewrite the user's latest message as ONE standalone search query that \
                       resolves references to the earlier conversation (\"it\", \"that file\"...). \
                       Keep the original language. Output ONLY the query text.";
@@ -255,10 +252,7 @@ impl AskUseCase {
         let repositories = self.repositories.list_by_workspace(workspace_id)?;
         let system = build_system_prompt(&workspace.name, &repositories, &hits);
         let mut turns = history;
-        turns.push(ChatTurn {
-            role: "user".to_string(),
-            content: question.to_string(),
-        });
+        turns.push(ChatTurn::user(question));
 
         let llm = self.router.resolve(provider)?;
         let answer = llm
@@ -338,6 +332,7 @@ impl AskUseCase {
                     Role::Assistant => "assistant".to_string(),
                 },
                 content: m.content.clone(),
+                ..Default::default()
             })
             .collect())
     }

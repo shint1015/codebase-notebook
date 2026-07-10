@@ -116,10 +116,7 @@ impl SearchUseCase {
             let excerpt: String = hit.chunk.content.chars().take(300).collect();
             prompt.push_str(&format!("[{}] {}\n{}\n\n", i + 1, hit.rel_path, excerpt));
         }
-        let turns = [ChatTurn {
-            role: "user".to_string(),
-            content: prompt,
-        }];
+        let turns = [ChatTurn::user(prompt)];
         let reply = match llm
             .chat(&config.default_model, "You are a code search reranker.", &turns)
             .await

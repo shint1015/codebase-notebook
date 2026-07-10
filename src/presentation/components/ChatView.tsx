@@ -30,6 +30,8 @@ export function ChatView({
   const chat = useChat(workspace.id, session?.id ?? null, onSessionCreated);
   const [input, setInput] = useState("");
   const [provider, setProvider] = useState<ProviderKind>("ollama");
+  const [agentMode, setAgentMode] = useState(false);
+  const [allowWrites, setAllowWrites] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const enabled = providers.filter((p) => p.enabled);
@@ -47,7 +49,7 @@ export function ChatView({
   const submit = async () => {
     const question = input;
     setInput("");
-    await chat.send(question, provider);
+    await chat.send(question, provider, agentMode, agentMode && allowWrites);
   };
 
   return (
@@ -102,7 +104,23 @@ export function ChatView({
           </div>
         )}
         {chat.messages.map((m) => (
-          <MessageBubble key={m.id} message={m} workspaceId={workspace.id} />
+          <div key={m.id}>
+            {chat.toolEvents[m.id] && (
+              <div className="tool-trace">
+                {chat.toolEvents[m.id].map((event, i) => (
+                  <div
+                    key={i}
+                    className={`tool-event ${event.blocked ? "blocked" : ""}`}
+                    title={event.result}
+                  >
+                    {event.blocked ? "⛔" : "🛠"} {event.summary}
+                    {event.blocked && " (needs approval)"}
+                  </div>
+                ))}
+              </div>
+            )}
+            <MessageBubble message={m} workspaceId={workspace.id} />
+          </div>
         ))}
         {chat.streamingText !== null &&
           (chat.streamingText === "" ? (
@@ -116,10 +134,40 @@ export function ChatView({
         <div ref={bottomRef} />
       </div>
 
+      <div className="composer-tools">
+        <label className="agent-toggle">
+          <input
+            type="checkbox"
+            checked={agentMode}
+            onChange={(e) => setAgentMode(e.target.checked)}
+          />
+          🛠 Agent mode
+        </label>
+        {agentMode && (
+          <>
+            <label className="agent-toggle" title="Let the agent create issues / write wiki pages">
+              <input
+                type="checkbox"
+                checked={allowWrites}
+                onChange={(e) => setAllowWrites(e.target.checked)}
+              />
+              Allow actions (create issues, write wiki)
+            </label>
+            <span className="agent-hint">
+              The agent can search sources and take the enabled actions.
+            </span>
+          </>
+        )}
+      </div>
+
       <footer className="composer">
         <textarea
           value={input}
-          placeholder="Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"
+          placeholder={
+            agentMode
+              ? "Tell the agent what to do… (Ctrl+Enter or ⌘+Enter)"
+              : "Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"
+          }
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (

@@ -457,6 +457,118 @@ async fn single_file_and_github_issues_sources() {
 }
 
 #[tokio::test]
+async fn agent_runs_tools_and_gates_writes() {
+    use codebase_notebook_lib::application::usecases::agent::AgentUseCase;
+    use codebase_notebook_lib::domain::services::{AgentStep, Tool, ToolCall, ToolSpec};
+    use std::sync::Mutex;
+
+    let h = setup().await;
+    h.index.execute(&h.workspace_id).await.unwrap();
+
+    struct RecordingWriteTool {
+        executed: Arc<Mutex<bool>>,
+    }
+    #[async_trait]
+    impl Tool for RecordingWriteTool {
+        fn spec(&self) -> ToolSpec {
+            ToolSpec {
+                name: "create_issue".into(),
+                description: "create an issue".into(),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+            }
+        }
+        fn requires_consent(&self) -> bool {
+            true
+        }
+        fn describe_call(&self, _a: &serde_json::Value) -> String {
+            "create an issue".into()
+        }
+        async fn execute(&self, _w: &str, _a: &serde_json::Value) -> DomainResult<String> {
+            *self.executed.lock().unwrap() = true;
+            Ok("created issue #1".into())
+        }
+    }
+
+    struct ScriptedLlm {
+        round: Mutex<usize>,
+    }
+    #[async_trait]
+    impl LlmProvider for ScriptedLlm {
+        fn kind(&self) -> ProviderKind {
+            ProviderKind::Ollama
+        }
+        async fn chat(&self, _m: &str, _s: &str, _t: &[ChatTurn]) -> DomainResult<String> {
+            Ok("ok".into())
+        }
+        async fn chat_with_tools(
+            &self,
+            _m: &str,
+            _s: &str,
+            _t: &[ChatTurn],
+            _tools: &[ToolSpec],
+        ) -> DomainResult<AgentStep> {
+            let mut round = self.round.lock().unwrap();
+            *round += 1;
+            if *round == 1 {
+                Ok(AgentStep::ToolCalls(vec![ToolCall {
+                    id: "c1".into(),
+                    name: "create_issue".into(),
+                    arguments: serde_json::json!({}),
+                }]))
+            } else {
+                Ok(AgentStep::Message("Done.".into()))
+            }
+        }
+        async fn test_connection(&self) -> DomainResult<String> {
+            Ok("ok".into())
+        }
+    }
+    struct ScriptedRouter;
+    impl ProviderRouter for ScriptedRouter {
+        fn resolve(&self, _k: ProviderKind) -> DomainResult<Arc<dyn LlmProvider>> {
+            Ok(Arc::new(ScriptedLlm {
+                round: Mutex::new(0),
+            }))
+        }
+    }
+
+    let build_agent = |executed: Arc<Mutex<bool>>| {
+        let db = Db::open(&h._tmp.path().join("test.sqlite")).unwrap();
+        AgentUseCase::new(
+            Arc::new(SqliteWorkspaceRepository::new(db.clone())),
+            Arc::new(SqliteChatRepository::new(db.clone())),
+            Arc::new(SqliteProviderConfigRepository::new(db)),
+            Arc::new(ScriptedRouter),
+            vec![Arc::new(RecordingWriteTool { executed })],
+        )
+    };
+
+    let mut config = ProviderConfig::default_for(ProviderKind::Ollama);
+    config.enabled = true;
+    h.providers.upsert(&config).unwrap();
+    let session = h.chats.create_session(&h.workspace_id, "agent").unwrap();
+
+    // Writes NOT allowed → tool is blocked, never executes.
+    let executed = Arc::new(Mutex::new(false));
+    let outcome = build_agent(executed.clone())
+        .run(&session.id, &h.workspace_id, "file an issue", ProviderKind::Ollama, false)
+        .await
+        .unwrap();
+    assert!(outcome.tool_events.iter().any(|e| e.blocked));
+    assert!(!*executed.lock().unwrap(), "write must not run without approval");
+
+    // Writes allowed → tool executes.
+    let executed = Arc::new(Mutex::new(false));
+    let outcome = build_agent(executed.clone())
+        .run(&session.id, &h.workspace_id, "file an issue", ProviderKind::Ollama, true)
+        .await
+        .unwrap();
+    assert!(outcome.tool_events.iter().any(|e| !e.blocked));
+    assert!(*executed.lock().unwrap(), "write must run once approved");
+    assert_eq!(outcome.message.content, "Done.");
+}
+
+#[tokio::test]
 async fn disabled_provider_is_rejected() {
     let h = setup().await;
     h.index.execute(&h.workspace_id).await.unwrap();

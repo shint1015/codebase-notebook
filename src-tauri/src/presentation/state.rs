@@ -38,15 +38,17 @@ pub const EMBEDDING_MODEL: &str = "nomic-embed-text";
 pub struct AppState {
     pub workspaces: WorkspaceUseCases,
     pub repositories: RepositoryUseCases,
-    pub publish: PublishUseCases,
+    pub publish: Arc<PublishUseCases>,
     pub chats: ChatUseCases,
     pub providers: ProviderUseCases,
     pub index: IndexWorkspaceUseCase,
     pub search: Arc<SearchUseCase>,
     pub ask: AskUseCase,
+    pub agent: crate::application::usecases::agent::AgentUseCase,
     pub documents: Arc<dyn DocumentRepository>,
     pub settings: Arc<dyn crate::domain::services::SettingsRepository>,
     pub usage: Arc<dyn crate::domain::repositories::UsageRepository>,
+    pub secrets: Arc<dyn crate::domain::services::SecretStore>,
     repository_reader: Arc<dyn RepositoryRepository>,
 }
 
@@ -99,6 +101,44 @@ impl AppState {
             settings_repo.clone(),
         ));
 
+        let publish = Arc::new(PublishUseCases::new(
+            repository_repo.clone(),
+            issue_service.clone(),
+            cloner.clone(),
+        ));
+
+        // Agent tools: search (read) + write tools (GitHub, connectors), all
+        // gated behind explicit approval in the agent loop.
+        use crate::domain::services::Tool;
+        let secret_store_dyn: Arc<dyn crate::domain::services::SecretStore> = secret_store.clone();
+        let tools: Vec<Arc<dyn Tool>> = vec![
+            Arc::new(crate::application::tools::search::SearchSourcesTool::new(
+                search.clone(),
+            )),
+            Arc::new(crate::application::tools::github::CreateGithubIssueTool::new(
+                publish.clone(),
+            )),
+            Arc::new(crate::application::tools::github::WriteWikiPageTool::new(
+                publish.clone(),
+                repository_repo.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::slack::SlackPostMessageTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::notion::NotionCreatePageTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::asana::AsanaCreateTaskTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::backlog::BacklogCreateIssueTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::confluence::ConfluenceCreatePageTool::new(
+                secret_store_dyn.clone(),
+            )),
+        ];
+
         Ok(Self {
             workspaces: WorkspaceUseCases::new(workspace_repo.clone()),
             repositories: RepositoryUseCases::new(
@@ -110,7 +150,7 @@ impl AppState {
                 issue_service.clone(),
                 clones_dir,
             ),
-            publish: PublishUseCases::new(repository_repo.clone(), issue_service, cloner),
+            publish: publish.clone(),
             repository_reader: repository_repo.clone(),
             chats: ChatUseCases::new(chat_repo.clone()),
             providers: ProviderUseCases::new(
@@ -128,19 +168,27 @@ impl AppState {
                 embedder,
             ),
             ask: AskUseCase::new(
-                workspace_repo,
+                workspace_repo.clone(),
                 repository_repo.clone(),
                 document_repo.clone(),
+                chat_repo.clone(),
+                provider_repo.clone(),
+                usage_repo.clone(),
+                router.clone(),
+                search.clone(),
+            ),
+            agent: crate::application::usecases::agent::AgentUseCase::new(
+                workspace_repo,
                 chat_repo,
                 provider_repo,
-                usage_repo.clone(),
                 router,
-                search.clone(),
+                tools,
             ),
             search,
             documents: document_repo,
             settings: settings_repo,
             usage: usage_repo,
+            secrets: secret_store_dyn,
         })
     }
 
