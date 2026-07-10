@@ -33,6 +33,30 @@ impl ChatRepository for SqliteChatRepository {
         Ok(())
     }
 
+    fn find_session(&self, session_id: &str) -> DomainResult<ChatSession> {
+        self.db
+            .lock()
+            .query_row(
+                "SELECT id, workspace_id, title, created_at
+                 FROM chat_sessions WHERE id = ?1",
+                params![session_id],
+                |row| {
+                    Ok(ChatSession {
+                        id: row.get(0)?,
+                        workspace_id: row.get(1)?,
+                        title: row.get(2)?,
+                        created_at: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    DomainError::NotFound(format!("session {session_id}"))
+                }
+                other => DomainError::Storage(format!("find session: {other}")),
+            })
+    }
+
     fn list_sessions(&self, workspace_id: &str) -> DomainResult<Vec<ChatSession>> {
         let conn = self.db.lock();
         let mut stmt = conn

@@ -13,7 +13,7 @@ use codebase_notebook_lib::application::usecases::search::SearchUseCase;
 use codebase_notebook_lib::application::usecases::workspace::WorkspaceUseCases;
 use codebase_notebook_lib::domain::entities::provider::{ProviderConfig, ProviderKind};
 use codebase_notebook_lib::domain::error::{DomainError, DomainResult};
-use codebase_notebook_lib::domain::repositories::ProviderConfigRepository;
+use codebase_notebook_lib::domain::repositories::{ChatRepository, ProviderConfigRepository};
 use codebase_notebook_lib::domain::services::{
     ChatTurn, EmbeddingProvider, IssueDoc, IssueFetcher, LlmProvider, ProviderRouter,
 };
@@ -566,6 +566,48 @@ async fn agent_runs_tools_and_gates_writes() {
     assert!(outcome.tool_events.iter().any(|e| !e.blocked));
     assert!(*executed.lock().unwrap(), "write must run once approved");
     assert_eq!(outcome.message.content, "Done.");
+}
+
+#[tokio::test]
+async fn forking_a_chat_duplicates_its_messages() {
+    let h = setup().await;
+    let session = h.chats.create_session(&h.workspace_id, "original").unwrap();
+
+    // Two messages in the source chat (append via the repo directly).
+    let db = Db::open(&h._tmp.path().join("test.sqlite")).unwrap();
+    let chat_repo = SqliteChatRepository::new(db);
+    use codebase_notebook_lib::domain::entities::chat::{Message, Role};
+    for (role, content) in [(Role::User, "hi"), (Role::Assistant, "hello [1]")] {
+        chat_repo
+            .append_message(&Message {
+                id: uuid::Uuid::new_v4().to_string(),
+                session_id: session.id.clone(),
+                role,
+                content: content.into(),
+                citations: Vec::new(),
+                provider: None,
+                model: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+            })
+            .unwrap();
+    }
+
+    let forked = h.chats.fork_session(&session.id).unwrap();
+    assert_ne!(forked.id, session.id);
+    assert_eq!(forked.title, "original (fork)");
+    assert_eq!(forked.workspace_id, h.workspace_id);
+
+    let original_msgs = h.chats.list_messages(&session.id).unwrap();
+    let forked_msgs = h.chats.list_messages(&forked.id).unwrap();
+    assert_eq!(forked_msgs.len(), original_msgs.len());
+    assert_eq!(forked_msgs[0].content, "hi");
+    // Copied messages get fresh ids.
+    assert_ne!(forked_msgs[0].id, original_msgs[0].id);
+
+    // The two chats are independent now.
+    let listed = h.chats.list_sessions(&h.workspace_id).unwrap();
+    assert!(listed.iter().any(|s| s.id == session.id));
+    assert!(listed.iter().any(|s| s.id == forked.id));
 }
 
 #[tokio::test]

@@ -71,6 +71,12 @@ export const api = {
     invoke<void>("delete_chat_session", { sessionId }),
   exportChat: (sessionId: string, destPath: string) =>
     invoke<void>("export_chat", { sessionId, destPath }),
+  forkChatSession: (sessionId: string) =>
+    invoke<ChatSession>("fork_chat_session", { sessionId }),
+  chatMarkdown: (sessionId: string) =>
+    invoke<string>("chat_markdown", { sessionId }),
+  chatToDocument: (workspaceId: string, sessionId: string, title: string) =>
+    invoke<string>("chat_to_document", { workspaceId, sessionId, title }),
   revealSource: (workspaceId: string, relPath: string, line: number) =>
     invoke<void>("reveal_source", { workspaceId, relPath, line }),
 

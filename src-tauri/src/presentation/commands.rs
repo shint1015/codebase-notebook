@@ -317,6 +317,35 @@ pub fn export_chat(
 }
 
 #[tauri::command]
+pub fn fork_chat_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<ChatSession> {
+    Ok(state.chats.fork_session(&session_id)?)
+}
+
+/// Chat transcript as markdown (for "Copy").
+#[tauri::command]
+pub fn chat_markdown(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CommandResult<String> {
+    Ok(state.chats.export_markdown(&session_id)?)
+}
+
+/// Save a chat as an in-app markdown document; returns the note file name.
+#[tauri::command]
+pub fn chat_to_document(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    session_id: String,
+    title: String,
+) -> CommandResult<String> {
+    let markdown = state.chats.export_markdown(&session_id)?;
+    Ok(state.notes.save(&workspace_id, &title, &markdown)?)
+}
+
+#[tauri::command]
 pub fn reveal_source(
     state: State<'_, AppState>,
     workspace_id: String,
