@@ -434,6 +434,24 @@ pub async fn pull_ollama_model(
     Ok(admin.pull(&model, &sink).await?)
 }
 
+// ---- agent ----
+
+#[tauri::command]
+pub async fn agent_ask(
+    state: State<'_, AppState>,
+    session_id: String,
+    workspace_id: String,
+    question: String,
+    provider: String,
+    allow_writes: bool,
+) -> CommandResult<crate::application::usecases::agent::AgentOutcome> {
+    let kind = parse_kind(&provider)?;
+    Ok(state
+        .agent
+        .run(&session_id, &workspace_id, &question, kind, allow_writes)
+        .await?)
+}
+
 // ---- search settings ----
 
 #[derive(Debug, Serialize)]

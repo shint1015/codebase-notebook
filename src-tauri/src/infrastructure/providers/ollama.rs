@@ -4,9 +4,14 @@ use serde_json::json;
 
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::services::{ChatTurn, EmbeddingProvider, LlmProvider, TokenSink};
+use crate::domain::services::{
+    AgentStep, ChatTurn, EmbeddingProvider, LlmProvider, TokenSink, ToolSpec,
+};
 
-use super::{for_each_line, http_client, probe_client};
+use super::{
+    for_each_line, http_client, openai_messages, openai_tools, parse_tool_calls,
+    probe_client, tool_calls_from_content,
+};
 
 /// Local inference via the Ollama HTTP API. This is the default provider —
 /// nothing ever leaves the machine.
@@ -34,6 +39,19 @@ struct OllamaChatMessage {
     content: String,
 }
 
+#[derive(Deserialize)]
+struct OllamaToolResponse {
+    message: OllamaToolMessage,
+}
+
+#[derive(Deserialize)]
+struct OllamaToolMessage {
+    #[serde(default)]
+    content: String,
+    #[serde(default)]
+    tool_calls: serde_json::Value,
+}
+
 #[async_trait]
 impl LlmProvider for OllamaProvider {
     fn kind(&self) -> ProviderKind {
@@ -41,16 +59,12 @@ impl LlmProvider for OllamaProvider {
     }
 
     async fn chat(&self, model: &str, system: &str, turns: &[ChatTurn]) -> DomainResult<String> {
-        let mut messages = vec![json!({"role": "system", "content": system})];
-        for turn in turns {
-            messages.push(json!({"role": turn.role, "content": turn.content}));
-        }
         let response = self
             .client
             .post(format!("{}/api/chat", self.base_url))
             .json(&json!({
                 "model": model,
-                "messages": messages,
+                "messages": openai_messages(system, turns),
                 "stream": false,
             }))
             .send()
@@ -68,6 +82,48 @@ impl LlmProvider for OllamaProvider {
             .await
             .map_err(|e| DomainError::Provider(format!("ollama response: {e}")))?;
         Ok(parsed.message.content)
+    }
+
+    async fn chat_with_tools(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        tools: &[ToolSpec],
+    ) -> DomainResult<AgentStep> {
+        let response = self
+            .client
+            .post(format!("{}/api/chat", self.base_url))
+            .json(&json!({
+                "model": model,
+                "messages": openai_messages(system, turns),
+                "tools": openai_tools(tools),
+                "stream": false,
+            }))
+            .send()
+            .await
+            .map_err(|e| DomainError::Provider(format!("ollama request: {e}")))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(DomainError::Provider(format!(
+                "ollama returned {status}: {body}"
+            )));
+        }
+        let parsed: OllamaToolResponse = response
+            .json()
+            .await
+            .map_err(|e| DomainError::Provider(format!("ollama response: {e}")))?;
+        let mut calls = parse_tool_calls(&parsed.message.tool_calls);
+        if calls.is_empty() {
+            // Some templates put the tool call in content as JSON.
+            calls = tool_calls_from_content(&parsed.message.content);
+        }
+        if calls.is_empty() {
+            Ok(AgentStep::Message(parsed.message.content))
+        } else {
+            Ok(AgentStep::ToolCalls(calls))
+        }
     }
 
     async fn chat_stream(
