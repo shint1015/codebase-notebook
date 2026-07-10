@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-10
+
 ### Changed
 
 - Fork and copy are now per-message hover actions on each chat bubble: hover
