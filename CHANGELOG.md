@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Fork and copy are now per-message hover actions on each chat bubble: hover
+  (or focus) a message to reveal a copy icon and a fork icon. Forking from a
+  message branches the conversation up to that point into a new chat. The
+  header keeps whole-transcript Copy, Save as doc and Export.
+
 ## [0.9.0] - 2026-07-10
 
 ### Added
