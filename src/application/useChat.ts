@@ -5,6 +5,7 @@ import type {
   ChatSession,
   Message,
   ProviderKind,
+  ToolEvent,
 } from "../domain/types";
 import { isCommandError } from "../domain/types";
 
@@ -31,10 +32,13 @@ export function useChat(
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingConsent, setPendingConsent] = useState<PendingConsent | null>(null);
+  /// Tool calls from the most recent agent turn, keyed by the message id.
+  const [toolEvents, setToolEvents] = useState<Record<string, ToolEvent[]>>({});
 
   useEffect(() => {
     setError(null);
     setPendingConsent(null);
+    setToolEvents({});
     if (!sessionId) {
       setMessages([]);
       return;
@@ -84,13 +88,53 @@ export function useChat(
     [workspaceId, sessionId, ensureSession],
   );
 
-  /** Entry point from the input box: checks consent before anything is sent. */
+  const runAgent = useCallback(
+    async (question: string, provider: ProviderKind, allowWrites: boolean) => {
+      if (!workspaceId) return;
+      setBusy(true);
+      setError(null);
+      setStreamingText("");
+      try {
+        const sid = await ensureSession(question);
+        const outcome = await api.agentAsk(sid, workspaceId, question, provider, allowWrites);
+        setMessages(await api.listChatMessages(sid));
+        if (outcome.tool_events.length > 0) {
+          setToolEvents((prev) => ({
+            ...prev,
+            [outcome.message.id]: outcome.tool_events,
+          }));
+        }
+      } catch (e) {
+        setError(isCommandError(e) ? e.message : String(e));
+      } finally {
+        setBusy(false);
+        setStreamingText(null);
+      }
+    },
+    [workspaceId, ensureSession],
+  );
+
+  /**
+   * Entry point from the input box. In agent mode the model can call tools
+   * (search, create issues, write wiki); `allowWrites` opts into external
+   * actions for this message. In plain mode it's grounded Q&A with the
+   * external-send consent gate.
+   */
   const send = useCallback(
-    async (question: string, provider: ProviderKind) => {
+    async (
+      question: string,
+      provider: ProviderKind,
+      agentMode: boolean,
+      allowWrites: boolean,
+    ) => {
       if (!workspaceId) return;
       setError(null);
       const trimmed = question.trim();
       if (!trimmed) return;
+      if (agentMode) {
+        await runAgent(trimmed, provider, allowWrites);
+        return;
+      }
       try {
         const preparation = await api.prepareAsk(workspaceId, trimmed, provider, sessionId);
         if (preparation.requires_consent) {
@@ -102,7 +146,7 @@ export function useChat(
         setError(isCommandError(e) ? e.message : String(e));
       }
     },
-    [workspaceId, sessionId, runAsk],
+    [workspaceId, sessionId, runAsk, runAgent],
   );
 
   const approveConsent = useCallback(async () => {
@@ -130,6 +174,7 @@ export function useChat(
     streamingText,
     error,
     send,
+    toolEvents,
     pendingConsent,
     approveConsent,
     declineConsent,

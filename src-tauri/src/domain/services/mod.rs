@@ -3,11 +3,54 @@ use async_trait::async_trait;
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::DomainResult;
 
-/// One turn of a chat conversation sent to a model.
-#[derive(Debug, Clone)]
+/// One turn of a chat conversation sent to a model. Assistant turns may carry
+/// tool-call requests; tool-result turns carry `tool_call_id`.
+#[derive(Debug, Clone, Default)]
 pub struct ChatTurn {
     pub role: String,
     pub content: String,
+    pub tool_calls: Vec<ToolCall>,
+    pub tool_call_id: Option<String>,
+}
+
+impl ChatTurn {
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: "user".into(),
+            content: content.into(),
+            ..Default::default()
+        }
+    }
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: "assistant".into(),
+            content: content.into(),
+            ..Default::default()
+        }
+    }
+}
+
+/// A callable capability advertised to the model (JSON-schema parameters).
+#[derive(Debug, Clone)]
+pub struct ToolSpec {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+}
+
+/// A tool invocation the model asked for.
+#[derive(Debug, Clone)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+}
+
+/// One step of an agent conversation: either a final answer or tool requests.
+#[derive(Debug, Clone)]
+pub enum AgentStep {
+    Message(String),
+    ToolCalls(Vec<ToolCall>),
 }
 
 /// Receives incremental answer fragments during generation.
@@ -32,8 +75,37 @@ pub trait LlmProvider: Send + Sync {
         on_token(&text);
         Ok(text)
     }
+    /// Tool-calling variant. Providers without tool support return
+    /// `AgentStep::Message` from a plain chat (tools are then unavailable).
+    async fn chat_with_tools(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        _tools: &[ToolSpec],
+    ) -> DomainResult<AgentStep> {
+        Ok(AgentStep::Message(self.chat(model, system, turns).await?))
+    }
     /// Cheap connectivity / credential check.
     async fn test_connection(&self) -> DomainResult<String>;
+}
+
+/// A capability the agent can invoke on the user's behalf (search sources,
+/// create an issue, post to Slack, ...). External writes set
+/// `requires_consent` so the agent gates them behind explicit approval.
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn spec(&self) -> ToolSpec;
+    /// True for actions that change external state and need user approval.
+    fn requires_consent(&self) -> bool;
+    /// Short human-readable summary of what a call would do (for the approval
+    /// prompt), e.g. "Create issue \"Fix login\" in acme/app".
+    fn describe_call(&self, arguments: &serde_json::Value) -> String;
+    async fn execute(
+        &self,
+        workspace_id: &str,
+        arguments: &serde_json::Value,
+    ) -> DomainResult<String>;
 }
 
 /// Text embedding backend (local by default).
@@ -48,6 +120,11 @@ pub trait SecretStore: Send + Sync {
     fn set_api_key(&self, kind: ProviderKind, api_key: &str) -> DomainResult<()>;
     fn get_api_key(&self, kind: ProviderKind) -> DomainResult<Option<String>>;
     fn delete_api_key(&self, kind: ProviderKind) -> DomainResult<()>;
+    /// Generic keychain slot for connector tokens (Slack, Notion, ...),
+    /// addressed by an arbitrary key such as "connector-slack".
+    fn set_secret(&self, key: &str, value: &str) -> DomainResult<()>;
+    fn get_secret(&self, key: &str) -> DomainResult<Option<String>>;
+    fn delete_secret(&self, key: &str) -> DomainResult<()>;
 }
 
 /// A source file discovered under a workspace root.

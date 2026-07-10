@@ -12,7 +12,11 @@ pub struct KeyringSecretStore;
 
 impl KeyringSecretStore {
     fn entry(kind: ProviderKind) -> DomainResult<Entry> {
-        Entry::new(SERVICE, &format!("api-key-{}", kind.as_str()))
+        Self::entry_for(&format!("api-key-{}", kind.as_str()))
+    }
+
+    fn entry_for(key: &str) -> DomainResult<Entry> {
+        Entry::new(SERVICE, key)
             .map_err(|e| DomainError::SecretStore(format!("open keychain entry: {e}")))
     }
 }
@@ -36,6 +40,27 @@ impl SecretStore for KeyringSecretStore {
         match Self::entry(kind)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(DomainError::SecretStore(format!("delete key: {e}"))),
+        }
+    }
+
+    fn set_secret(&self, key: &str, value: &str) -> DomainResult<()> {
+        Self::entry_for(key)?
+            .set_password(value)
+            .map_err(|e| DomainError::SecretStore(format!("store secret: {e}")))
+    }
+
+    fn get_secret(&self, key: &str) -> DomainResult<Option<String>> {
+        match Self::entry_for(key)?.get_password() {
+            Ok(value) => Ok(Some(value)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(DomainError::SecretStore(format!("read secret: {e}"))),
+        }
+    }
+
+    fn delete_secret(&self, key: &str) -> DomainResult<()> {
+        match Self::entry_for(key)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(DomainError::SecretStore(format!("delete secret: {e}"))),
         }
     }
 }

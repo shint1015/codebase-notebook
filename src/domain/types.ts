@@ -146,6 +146,18 @@ export interface SourcePreview {
   end_line: number;
 }
 
+export interface ToolEvent {
+  name: string;
+  summary: string;
+  result: string;
+  blocked: boolean;
+}
+
+export interface AgentOutcome {
+  message: Message;
+  tool_events: ToolEvent[];
+}
+
 export interface AskPreparation {
   provider: ProviderKind;
   model: string;

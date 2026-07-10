@@ -99,6 +99,26 @@ export const api = {
     return invoke<void>("pull_ollama_model", { model, onProgress: channel });
   },
 
+  listConnectors: () =>
+    invoke<{ name: string; connected: boolean }[]>("list_connectors"),
+  setConnectorToken: (connector: string, token: string) =>
+    invoke<void>("set_connector_token", { connector, token }),
+
+  agentAsk: (
+    sessionId: string,
+    workspaceId: string,
+    question: string,
+    provider: ProviderKind,
+    allowWrites: boolean,
+  ) =>
+    invoke<import("../domain/types").AgentOutcome>("agent_ask", {
+      sessionId,
+      workspaceId,
+      question,
+      provider,
+      allowWrites,
+    }),
+
   getSearchSettings: () =>
     invoke<{ embedding_model: string; rerank_enabled: boolean }>(
       "get_search_settings",

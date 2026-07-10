@@ -4,9 +4,12 @@ use serde_json::json;
 
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::services::{ChatTurn, LlmProvider, TokenSink};
+use crate::domain::services::{AgentStep, ChatTurn, LlmProvider, TokenSink, ToolSpec};
 
-use super::{for_each_line, http_client, probe_client, sse_data};
+use super::{
+    for_each_line, http_client, openai_messages, openai_tools, parse_tool_calls, probe_client,
+    sse_data,
+};
 
 /// Adapter for OpenAI and any OpenAI-compatible endpoint (LM Studio, vLLM,
 /// in-house gateways). BYOK: the key is injected at call time from the OS
@@ -52,6 +55,25 @@ struct ChatChoiceMessage {
 }
 
 #[derive(Deserialize)]
+struct ToolCompletionResponse {
+    #[serde(default)]
+    choices: Vec<ToolChoice>,
+}
+
+#[derive(Deserialize)]
+struct ToolChoice {
+    message: ToolMessage,
+}
+
+#[derive(Deserialize)]
+struct ToolMessage {
+    #[serde(default)]
+    content: Option<String>,
+    #[serde(default)]
+    tool_calls: serde_json::Value,
+}
+
+#[derive(Deserialize)]
 struct StreamChunk {
     #[serde(default)]
     choices: Vec<StreamChoice>,
@@ -76,16 +98,12 @@ impl LlmProvider for OpenAiCompatProvider {
     }
 
     async fn chat(&self, model: &str, system: &str, turns: &[ChatTurn]) -> DomainResult<String> {
-        let mut messages = vec![json!({"role": "system", "content": system})];
-        for turn in turns {
-            messages.push(json!({"role": turn.role, "content": turn.content}));
-        }
         let response = self
             .authorized(
                 self.client
                     .post(format!("{}/chat/completions", self.base_url)),
             )
-            .json(&json!({"model": model, "messages": messages}))
+            .json(&json!({"model": model, "messages": openai_messages(system, turns)}))
             .send()
             .await
             .map_err(|e| DomainError::Provider(format!("{} request: {e}", self.kind.as_str())))?;
@@ -107,6 +125,51 @@ impl LlmProvider for OpenAiCompatProvider {
             .next()
             .and_then(|c| c.message.content)
             .ok_or_else(|| DomainError::Provider("empty completion".into()))
+    }
+
+    async fn chat_with_tools(
+        &self,
+        model: &str,
+        system: &str,
+        turns: &[ChatTurn],
+        tools: &[ToolSpec],
+    ) -> DomainResult<AgentStep> {
+        let response = self
+            .authorized(
+                self.client
+                    .post(format!("{}/chat/completions", self.base_url)),
+            )
+            .json(&json!({
+                "model": model,
+                "messages": openai_messages(system, turns),
+                "tools": openai_tools(tools),
+            }))
+            .send()
+            .await
+            .map_err(|e| DomainError::Provider(format!("{} request: {e}", self.kind.as_str())))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(DomainError::Provider(format!(
+                "{} returned {status}: {body}",
+                self.kind.as_str()
+            )));
+        }
+        let parsed: ToolCompletionResponse = response
+            .json()
+            .await
+            .map_err(|e| DomainError::Provider(format!("{} response: {e}", self.kind.as_str())))?;
+        let choice = parsed
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| DomainError::Provider("empty completion".into()))?;
+        let calls = parse_tool_calls(&choice.message.tool_calls);
+        if calls.is_empty() {
+            Ok(AgentStep::Message(choice.message.content.unwrap_or_default()))
+        } else {
+            Ok(AgentStep::ToolCalls(calls))
+        }
     }
 
     async fn chat_stream(
