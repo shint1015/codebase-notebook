@@ -1,3 +1,4 @@
+pub mod connectors;
 pub mod indexing;
 pub mod persistence;
 pub mod providers;

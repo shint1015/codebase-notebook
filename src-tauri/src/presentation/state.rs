@@ -48,6 +48,7 @@ pub struct AppState {
     pub documents: Arc<dyn DocumentRepository>,
     pub settings: Arc<dyn crate::domain::services::SettingsRepository>,
     pub usage: Arc<dyn crate::domain::repositories::UsageRepository>,
+    pub secrets: Arc<dyn crate::domain::services::SecretStore>,
     repository_reader: Arc<dyn RepositoryRepository>,
 }
 
@@ -106,8 +107,11 @@ impl AppState {
             cloner.clone(),
         ));
 
-        // Agent tools: search (read) + GitHub issue / wiki (write, gated).
-        let tools: Vec<Arc<dyn crate::domain::services::Tool>> = vec![
+        // Agent tools: search (read) + write tools (GitHub, connectors), all
+        // gated behind explicit approval in the agent loop.
+        use crate::domain::services::Tool;
+        let secret_store_dyn: Arc<dyn crate::domain::services::SecretStore> = secret_store.clone();
+        let tools: Vec<Arc<dyn Tool>> = vec![
             Arc::new(crate::application::tools::search::SearchSourcesTool::new(
                 search.clone(),
             )),
@@ -117,6 +121,21 @@ impl AppState {
             Arc::new(crate::application::tools::github::WriteWikiPageTool::new(
                 publish.clone(),
                 repository_repo.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::slack::SlackPostMessageTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::notion::NotionCreatePageTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::asana::AsanaCreateTaskTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::backlog::BacklogCreateIssueTool::new(
+                secret_store_dyn.clone(),
+            )),
+            Arc::new(crate::infrastructure::connectors::confluence::ConfluenceCreatePageTool::new(
+                secret_store_dyn.clone(),
             )),
         ];
 
@@ -169,6 +188,7 @@ impl AppState {
             documents: document_repo,
             settings: settings_repo,
             usage: usage_repo,
+            secrets: secret_store_dyn,
         })
     }
 

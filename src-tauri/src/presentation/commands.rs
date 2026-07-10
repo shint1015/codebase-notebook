@@ -434,6 +434,50 @@ pub async fn pull_ollama_model(
     Ok(admin.pull(&model, &sink).await?)
 }
 
+// ---- connectors ----
+
+#[derive(Debug, Serialize)]
+pub struct ConnectorStatus {
+    pub name: String,
+    pub connected: bool,
+}
+
+#[tauri::command]
+pub fn list_connectors(state: State<'_, AppState>) -> CommandResult<Vec<ConnectorStatus>> {
+    use crate::infrastructure::connectors::{secret_key, CONNECTOR_KINDS};
+    let mut out = Vec::new();
+    for name in CONNECTOR_KINDS {
+        let connected = state.secrets.get_secret(&secret_key(name))?.is_some();
+        out.push(ConnectorStatus {
+            name: (*name).to_string(),
+            connected,
+        });
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn set_connector_token(
+    state: State<'_, AppState>,
+    connector: String,
+    token: String,
+) -> CommandResult<()> {
+    use crate::infrastructure::connectors::{secret_key, CONNECTOR_KINDS};
+    if !CONNECTOR_KINDS.contains(&connector.as_str()) {
+        return Err(CommandError {
+            code: "validation".into(),
+            message: format!("unknown connector: {connector}"),
+        });
+    }
+    let key = secret_key(&connector);
+    if token.trim().is_empty() {
+        state.secrets.delete_secret(&key)?;
+    } else {
+        state.secrets.set_secret(&key, token.trim())?;
+    }
+    Ok(())
+}
+
 // ---- agent ----
 
 #[tauri::command]

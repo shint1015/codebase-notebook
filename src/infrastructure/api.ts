@@ -99,6 +99,11 @@ export const api = {
     return invoke<void>("pull_ollama_model", { model, onProgress: channel });
   },
 
+  listConnectors: () =>
+    invoke<{ name: string; connected: boolean }[]>("list_connectors"),
+  setConnectorToken: (connector: string, token: string) =>
+    invoke<void>("set_connector_token", { connector, token }),
+
   agentAsk: (
     sessionId: string,
     workspaceId: string,

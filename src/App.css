@@ -1075,3 +1075,24 @@ textarea:focus {
   font-size: 11px;
   color: var(--text-dim);
 }
+
+.connector-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.connector-row > label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.connector-input {
+  display: flex;
+  gap: 8px;
+}
+
+.connector-input input {
+  flex: 1;
+}

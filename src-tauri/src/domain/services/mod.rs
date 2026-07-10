@@ -120,6 +120,11 @@ pub trait SecretStore: Send + Sync {
     fn set_api_key(&self, kind: ProviderKind, api_key: &str) -> DomainResult<()>;
     fn get_api_key(&self, kind: ProviderKind) -> DomainResult<Option<String>>;
     fn delete_api_key(&self, kind: ProviderKind) -> DomainResult<()>;
+    /// Generic keychain slot for connector tokens (Slack, Notion, ...),
+    /// addressed by an arbitrary key such as "connector-slack".
+    fn set_secret(&self, key: &str, value: &str) -> DomainResult<()>;
+    fn get_secret(&self, key: &str) -> DomainResult<Option<String>>;
+    fn delete_secret(&self, key: &str) -> DomainResult<()>;
 }
 
 /// A source file discovered under a workspace root.

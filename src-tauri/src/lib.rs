@@ -87,6 +87,8 @@ pub fn run() {
             commands::prepare_ask,
             commands::ask,
             commands::agent_ask,
+            commands::list_connectors,
+            commands::set_connector_token,
             commands::get_search_settings,
             commands::set_search_settings,
             commands::list_usage,
