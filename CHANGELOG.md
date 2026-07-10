@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expanded local HTTP API: `GET /api/sessions`, `GET /api/notes`,
+  `POST /api/index`, `POST /api/notes`, and an `agent` mode on `POST /api/ask`.
+- CLI (`cli/`, `cbnb`): operate the app from the terminal — workspaces, search,
+  ask, agent, index, list/create documents — over the local API.
+- MCP server (`mcp-server/`): exposes list_workspaces, search_sources, ask,
+  index_workspace, list_notes and create_note as MCP tools for Claude Desktop
+  and other MCP clients. Both reuse the token-protected, local-model-only API.
+
 ## [0.10.0] - 2026-07-10
 
 ### Changed

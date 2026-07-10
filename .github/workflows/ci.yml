@@ -56,3 +56,9 @@ jobs:
         run: |
           npm ci
           npm run compile
+
+      - name: Syntax-check CLI and MCP server
+        run: |
+          node --check cli/cbnb.mjs
+          node --check cli/lib.mjs
+          node --check mcp-server/server.mjs

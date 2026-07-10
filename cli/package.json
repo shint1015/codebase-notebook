@@ -1,0 +1,13 @@
+{
+  "name": "codebase-notebook-cli",
+  "version": "0.1.0",
+  "description": "Command-line client for the Codebase Notebook desktop app's local API.",
+  "type": "module",
+  "bin": {
+    "cbnb": "./cbnb.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

@@ -1,0 +1,17 @@
+{
+  "name": "codebase-notebook-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing the Codebase Notebook desktop app's local API as tools.",
+  "type": "module",
+  "bin": {
+    "codebase-notebook-mcp": "./server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  }
+}
