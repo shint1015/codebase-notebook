@@ -8,9 +8,13 @@ import { useSessions } from "./application/useSessions";
 import { WorkspaceSidebar } from "./presentation/components/WorkspaceSidebar";
 import { WorkspaceHome } from "./presentation/components/WorkspaceHome";
 import { ChatView } from "./presentation/components/ChatView";
+import { DocumentEditor } from "./presentation/components/DocumentEditor";
 import { SettingsView } from "./presentation/components/SettingsView";
 
-type View = { kind: "home" } | { kind: "chat"; session: ChatSession | null };
+type View =
+  | { kind: "home" }
+  | { kind: "chat"; session: ChatSession | null }
+  | { kind: "doc"; name: string | null };
 
 function App() {
   const ws = useWorkspaces();
@@ -72,7 +76,19 @@ function App() {
           <p>Create or select a workspace to start.</p>
         </main>
       ) : view.kind === "home" ? (
-        <WorkspaceHome workspace={ws.selected} onDeleteWorkspace={ws.remove} />
+        <WorkspaceHome
+          workspace={ws.selected}
+          onDeleteWorkspace={ws.remove}
+          onNewDocument={() => setView({ kind: "doc", name: null })}
+          onOpenDocument={(name) => setView({ kind: "doc", name })}
+        />
+      ) : view.kind === "doc" ? (
+        <DocumentEditor
+          workspace={ws.selected}
+          noteName={view.name}
+          onClose={() => setView({ kind: "home" })}
+          onSaved={() => void api.indexWorkspace(ws.selected!.id)}
+        />
       ) : (
         <ChatView
           workspace={ws.selected}

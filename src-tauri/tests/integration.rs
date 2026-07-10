@@ -569,6 +569,50 @@ async fn agent_runs_tools_and_gates_writes() {
 }
 
 #[tokio::test]
+async fn in_app_notes_are_saved_and_indexed() {
+    use codebase_notebook_lib::application::usecases::notes::NotesUseCases;
+
+    let h = setup().await;
+    let db = Db::open(&h._tmp.path().join("test.sqlite")).unwrap();
+    let notes = NotesUseCases::new(
+        Arc::new(SqliteWorkspaceRepository::new(db.clone())),
+        Arc::new(SqliteRepositoryRepository::new(db)),
+        h._tmp.path().join("clones"),
+    );
+
+    // Save a note; it registers the "notes" source and writes a .md file.
+    let file = notes
+        .save(
+            &h.workspace_id,
+            "Deploy Runbook",
+            "# Deploy\n\nRun `make deploy` to ship the release_pipeline.",
+        )
+        .unwrap();
+    assert_eq!(file, "Deploy-Runbook.md");
+
+    // Listed and readable.
+    let listed = notes.list(&h.workspace_id).unwrap();
+    assert!(listed.iter().any(|n| n.name == "Deploy-Runbook.md"));
+    assert!(notes
+        .read(&h.workspace_id, "Deploy-Runbook.md")
+        .unwrap()
+        .contains("make deploy"));
+
+    // Indexed and searchable under the notes/ prefix.
+    h.index.execute(&h.workspace_id).await.unwrap();
+    let hits = h
+        .search
+        .execute(&h.workspace_id, "deploy release_pipeline", 10)
+        .await
+        .unwrap();
+    assert!(hits.iter().any(|hit| hit.rel_path == "notes/Deploy-Runbook.md"));
+
+    // Delete removes the file.
+    notes.delete(&h.workspace_id, "Deploy-Runbook.md").unwrap();
+    assert!(notes.list(&h.workspace_id).unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn disabled_provider_is_rejected() {
     let h = setup().await;
     h.index.execute(&h.workspace_id).await.unwrap();

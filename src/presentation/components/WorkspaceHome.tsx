@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "../../domain/types";
+import { api } from "../../infrastructure/api";
 import { useRepositories } from "../../application/useRepositories";
 import { PublishPanel } from "./PublishPanel";
 import { OllamaBanner } from "./OllamaBanner";
@@ -8,16 +9,28 @@ import { OllamaBanner } from "./OllamaBanner";
 interface Props {
   workspace: Workspace;
   onDeleteWorkspace: (id: string) => Promise<void>;
+  onNewDocument: () => void;
+  onOpenDocument: (name: string) => void;
 }
 
 /**
  * Landing view for a workspace: manage its repositories and run indexing.
  * Chats are navigated from the sidebar.
  */
-export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
+export function WorkspaceHome({
+  workspace,
+  onDeleteWorkspace,
+  onNewDocument,
+  onOpenDocument,
+}: Props) {
   const repos = useRepositories(workspace.id);
   const [gitUrl, setGitUrl] = useState("");
   const [issuesSpec, setIssuesSpec] = useState("");
+  const [notes, setNotes] = useState<{ name: string; updated_at: string }[]>([]);
+
+  useEffect(() => {
+    void api.listNotes(workspace.id).then(setNotes);
+  }, [workspace.id]);
 
   const addLocalFolder = async () => {
     const dir = await open({ directory: true, multiple: false });
@@ -173,6 +186,30 @@ export function WorkspaceHome({ workspace, onDeleteWorkspace }: Props) {
           )}
         </div>
         {repos.error && <div className="error">{repos.error}</div>}
+      </section>
+
+      <section className="home-section">
+        <div className="home-section-header">
+          <h3>Documents</h3>
+          <button className="primary" onClick={onNewDocument}>
+            + New document
+          </button>
+        </div>
+        <ul className="session-list">
+          {notes.map((note) => (
+            <li key={note.name} onClick={() => onOpenDocument(note.name)}>
+              <span className="session-title">{note.name.replace(/\.md$/, "")}</span>
+              <span className="session-date">
+                {note.updated_at ? new Date(note.updated_at).toLocaleString() : ""}
+              </span>
+            </li>
+          ))}
+          {notes.length === 0 && (
+            <li className="empty">
+              Write markdown notes here — they're indexed and citable like any source.
+            </li>
+          )}
+        </ul>
       </section>
 
       <PublishPanel
