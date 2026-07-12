@@ -1,64 +1,160 @@
 # Codebase Notebook
 
-A local-first, source-grounded knowledge notebook for engineers — ask questions about your
-codebase and design docs, get answers **with citations**, while keeping confidential code on
-your machine.
+**Ask questions about your own code, docs, and issues — get answers with
+citations, without your confidential code leaving your machine.**
 
-## Concept
+Codebase Notebook is a local-first desktop app (macOS / Windows / Linux) that
+indexes your repositories, design docs, GitHub issues, and personal notes, and
+lets you chat with them. Answers are grounded in *your* sources and always cite
+where they came from. By default everything runs on a local model — nothing is
+sent to the cloud unless you explicitly opt in.
 
-- **Local-first**: no external network calls by default. Works with local LLMs (Ollama).
-- **BYOK (Bring Your Own Key)**: optionally use OpenAI / Anthropic / other cloud providers
-  with your own API key — only after an explicit per-request confirmation showing exactly
-  what content would be sent.
-- **Source-grounded**: answers are based on indexed sources and always cite them.
-  If the sources don't contain the answer, it says so.
-- **Secret-aware**: API keys, tokens, and private keys are detected and excluded at
-  indexing time. API keys for providers are stored in the OS keychain, never in the DB.
+---
 
-## Stack
+## Why you might want it
 
-- Tauri v2 (Rust core) + React + TypeScript + Vite
-- SQLite (FTS5 keyword search + embedded vector search)
-- Ollama for local inference / embeddings, pluggable provider adapters for cloud models
-- Clean Architecture (domain / application / infrastructure / presentation) on both sides
+- **Understand a large codebase** — "Where is the session token validated?"
+  and get a cited answer pointing at the exact files and lines.
+- **Search across everything at once** — code, Markdown/PDF/Word/Excel docs,
+  GitHub issues, wikis, and your own notes, in one place.
+- **Keep confidential code private** — it works fully offline with a local
+  model. Cloud AI is optional, opt-in, and shows you exactly what would be sent
+  before it sends anything.
+- **Take action** — in Agent mode it can file a GitHub issue, write a wiki
+  page, post to Slack, or create a Notion/Asana/Backlog/Confluence entry — but
+  only when you approve.
 
-## Development
+---
+
+## Requirements
+
+- **A local AI model via [Ollama](https://ollama.com)** (recommended, free,
+  runs offline). Install it, then pull the models:
+  ```bash
+  ollama pull qwen2.5-coder:14b   # chat / answers
+  ollama pull nomic-embed-text    # embeddings (better search)
+  ```
+  A smaller machine can use `qwen2.5-coder:7b` or `:1.5b`. The app also has an
+  in-app button to pull these for you if they're missing.
+- Alternatively (or in addition), a **cloud provider API key** — OpenAI,
+  Anthropic, Google Gemini, Mistral, or xAI — if you want to use those models.
+
+> No Ollama and no key? The app still works with keyword-only search, but
+> can't generate chat answers until a model is available.
+
+## Install
+
+Grab a release build if one is provided, or build it yourself:
+
+```bash
+git clone <this-repo> && cd codebase-notebook
+npm install
+npm run tauri build      # produces an installer in src-tauri/target/release/bundle/
+# …or run it without installing:
+npm run tauri dev
+```
+
+Building requires [Rust](https://rustup.rs) and Node.js 18+.
+
+---
+
+## Getting started
+
+1. **Create a workspace** — click **+ Add workspace** in the sidebar and give
+   it a name. A workspace is an isolated project; sources and chats never mix
+   between workspaces.
+2. **Add sources** — on the workspace home, add any of:
+   - **Folder** or **single file** on your disk
+   - a **git repository** by URL (it's cloned and managed for you)
+   - a **GitHub wiki** (use the `…/repo.wiki.git` URL)
+   - **GitHub issues** (`owner/repo`) — fetched and stored as Markdown
+3. **Index** — click **Index all repositories**. This scans your files, splits
+   them into pieces, and makes them searchable. (Secrets like API keys are
+   detected and stripped out before anything is indexed.)
+4. **Ask** — pick or start a chat in the sidebar and ask a question. Answers
+   cite their sources; click a citation to open that file at the right line.
+
+Local sources are watched for changes and re-indexed automatically. Managed
+sources (git clones, issues) have a **Sync** button to pull the latest.
+
+---
+
+## Using it
+
+### Chat
+
+- Answers stream in and render as Markdown (code blocks, tables, etc.).
+- **Citations** under each answer link back to the exact source and line.
+- Hover a message to **copy** it or **fork** the conversation from that point
+  into a new chat.
+- From the chat header you can **Copy** the whole transcript, **Save as doc**
+  (turns the chat into a searchable in-app document), or **Export** to a `.md`
+  file. Rename and delete chats from the sidebar.
+
+### Documents
+
+Create Markdown notes right inside the app (**Documents → + New document**),
+with a live **split / edit / preview** editor (Cmd/Ctrl+S to save). Your notes
+become part of the workspace — indexed, searchable, and citable like any other
+source.
+
+### Cloud models (optional, Bring Your Own Key)
+
+Open **⚙ AI Providers** to add a key for OpenAI, Anthropic, Gemini, Mistral, or
+xAI. When you use a cloud model, a dialog shows **exactly which files and lines
+would be sent** and asks you to approve — you can always fall back to the local
+model. Keys are stored in your OS keychain, never in a plain file, and you can
+set a **monthly budget** per provider. A usage log records every call with its
+estimated cost and the sources included.
+
+### Agent mode
+
+Toggle **🛠 Agent mode** in the composer to let the model *act*, not just
+answer — search your sources, then optionally take an action. Actions
+(creating a GitHub issue, writing a wiki page, posting to Slack, creating a
+Notion / Asana / Backlog / Confluence item) require you to tick **Allow
+actions** for that message, so nothing external happens without your consent.
+Connect those services under **⚙ AI Providers → Connectors**.
+
+---
+
+## Beyond the app: CLI, editor, and MCP
+
+While the app is running it exposes a small, token-protected API on
+`127.0.0.1` (local only, local-model only). Three optional bridges use it:
+
+- **CLI** ([`cli/`](cli/README.md)) — `cbnb search`, `cbnb ask`, `cbnb note`,
+  etc. from your terminal.
+- **VS Code extension** ([`vscode-extension/`](vscode-extension/README.md)) —
+  ask about the current selection or workspace without leaving your editor.
+- **MCP server** ([`mcp-server/`](mcp-server/README.md)) — expose your
+  workspaces to Claude Desktop and other MCP clients as tools.
+
+---
+
+## Your privacy
+
+- **Offline by default.** No network calls unless you enable a cloud provider.
+- **Explicit consent** before any code is sent to a cloud model, showing the
+  exact content.
+- **Secrets are stripped** from your sources before indexing; provider keys and
+  connector tokens live in the OS keychain.
+- **Everything is stored locally** — your index, chats, and documents stay in
+  the app's data directory on your machine.
+
+---
+
+## For developers
+
+Built with Tauri v2 (Rust) + React/TypeScript, SQLite (FTS5 + vector search),
+and Ollama, following Clean Architecture on both the Rust and frontend sides.
 
 ```bash
 npm install
 npm run tauri dev
-
-# Rust tests
-cd src-tauri && cargo test
+cd src-tauri && cargo test    # backend tests
 ```
 
-## Branching & Versioning
-
-Branches follow a develop-based flow:
-
-- `main` — released versions only; every release commit is tagged `vX.Y.Z`.
-- `develop` — integration branch. Carries a `-dev.N` prerelease version.
-- `feature/*`, `fix/*` — cut from `develop`, merged back into `develop`.
-
-The project follows [Semantic Versioning](https://semver.org/); `package.json`
-is the single source of truth and `scripts/bump-version.mjs` propagates the
-version to `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, and `CHANGELOG.md`.
-
-Releasing (on `main`, when merging develop):
-
-```bash
-git checkout main && git merge --no-ff develop
-npm run version:minor        # or version:patch / version:major
-                             # finalizes 0.3.0-dev.N -> 0.3.0 and promotes
-                             # CHANGELOG [Unreleased] into the new version
-git add -A && git commit -m "Release vX.Y.Z"
-git tag vX.Y.Z
-git checkout develop && git merge main   # bring the release back
-npm run version:dev          # optional: start the next prerelease (0.4.0-dev.0)
-git add -A && git commit -m "Start X.Y.Z-dev.0"
-```
-
-Day-to-day on `develop`: add CHANGELOG notes under `[Unreleased]` as you work;
-run `npm run version:dev` whenever you want a new distinguishable dev build.
-The SQLite schema is versioned independently via `PRAGMA user_version`
-migrations in `src-tauri/src/infrastructure/persistence/mod.rs` (append-only).
+Contribution workflow, branching, and release/versioning are documented in
+[CONTRIBUTING.md](CONTRIBUTING.md). Release notes live in
+[CHANGELOG.md](CHANGELOG.md).
