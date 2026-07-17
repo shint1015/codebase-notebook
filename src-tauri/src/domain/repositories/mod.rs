@@ -11,6 +11,7 @@ pub trait WorkspaceRepository: Send + Sync {
     fn find_by_id(&self, id: &str) -> DomainResult<Workspace>;
     fn list(&self) -> DomainResult<Vec<Workspace>>;
     fn set_allow_external(&self, id: &str, allow: bool) -> DomainResult<()>;
+    fn set_instructions(&self, id: &str, instructions: &str) -> DomainResult<()>;
     fn delete(&self, id: &str) -> DomainResult<()>;
 }
 

@@ -4,6 +4,7 @@ export interface Workspace {
   id: string;
   name: string;
   allow_external: boolean;
+  instructions: string;
   created_at: string;
 }
 
