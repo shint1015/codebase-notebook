@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-17
+
+### Added
+
+- MIT license.
+- Release workflow: pushing a `vX.Y.Z` tag builds unsigned installers for
+  macOS (Apple Silicon + Intel), Windows and Linux and attaches them to a
+  draft GitHub Release.
+
+### Changed
+
+- README rewritten for end users (download-first install, getting started,
+  privacy); contributor and release docs moved to CONTRIBUTING.md.
+
 ## [0.11.0] - 2026-07-10
 
 ### Added
