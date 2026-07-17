@@ -1,7 +1,19 @@
 # Codebase Notebook
 
+[![Release](https://img.shields.io/github/v/release/shint1015/codebase-notebook?sort=semver)](https://github.com/shint1015/codebase-notebook/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/shint1015/codebase-notebook/actions/workflows/ci.yml/badge.svg)](https://github.com/shint1015/codebase-notebook/actions/workflows/ci.yml)
+
 **Ask questions about your own code, docs, and issues — get answers with
 citations, without your confidential code leaving your machine.**
+
+<!-- TODO: record a ~30s demo (add workspace → index → ask → click a citation)
+     and drop it here as media/demo.gif — this is the highest-converting asset
+     on the whole page.
+<p align="center"><img src="media/demo.gif" alt="Codebase Notebook demo" width="800"></p>
+-->
+
+<p align="center"><em>Demo GIF coming soon.</em></p>
 
 Codebase Notebook is a local-first desktop app (macOS / Windows / Linux) that
 indexes your repositories, design docs, GitHub issues, and personal notes, and
@@ -44,17 +56,30 @@ sent to the cloud unless you explicitly opt in.
 
 ## Install
 
-Grab a release build if one is provided, or build it yourself:
+**[⬇ Download the latest release](https://github.com/shint1015/codebase-notebook/releases/latest)**
+for macOS (Apple Silicon / Intel), Windows, or Linux.
+
+The builds are **unsigned** (signing certificates cost money; this project is
+free), so your OS will warn you on first launch:
+
+- **macOS** — right-click the app → *Open* → *Open*, or run
+  `xattr -cr "/Applications/Codebase Notebook.app"`
+- **Windows** — SmartScreen: *More info* → *Run anyway*
+
+<details>
+<summary>Or build it yourself</summary>
+
+Requires [Rust](https://rustup.rs) and Node.js 18+.
 
 ```bash
-git clone <this-repo> && cd codebase-notebook
+git clone https://github.com/shint1015/codebase-notebook
+cd codebase-notebook
 npm install
-npm run tauri build      # produces an installer in src-tauri/target/release/bundle/
-# …or run it without installing:
-npm run tauri dev
+npm run tauri build   # installer in src-tauri/target/release/bundle/
+npm run tauri dev     # …or just run it
 ```
 
-Building requires [Rust](https://rustup.rs) and Node.js 18+.
+</details>
 
 ---
 
