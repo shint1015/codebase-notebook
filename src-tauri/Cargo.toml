@@ -1,8 +1,10 @@
 [package]
 name = "codebase-notebook"
-version = "0.11.0"
+version = "0.12.0-dev.0"
 description = "Local-first, source-grounded knowledge notebook for engineers"
 authors = ["spcsft"]
+license = "MIT"
+repository = "https://github.com/shint1015/codebase-notebook"
 edition = "2021"
 
 [lib]

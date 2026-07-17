@@ -1,7 +1,7 @@
 {
   "name": "codebase-notebook",
   "private": true,
-  "version": "0.11.0",
+  "version": "0.12.0-dev.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,5 +29,11 @@
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
+  },
+  "license": "MIT",
+  "description": "Local-first, source-grounded knowledge notebook for engineers — chat with your code and docs, with citations, without your code leaving your machine.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shint1015/codebase-notebook.git"
   }
 }
