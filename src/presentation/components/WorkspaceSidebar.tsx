@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ChatSession, Workspace } from "../../domain/types";
 import { useAppVersion } from "../../application/useAppVersion";
 
@@ -39,6 +40,7 @@ export function WorkspaceSidebar({
   const [renameValue, setRenameValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const version = useAppVersion();
+  const { t } = useTranslation();
 
   const commitRename = async () => {
     if (renamingId && renameValue.trim()) {
@@ -63,7 +65,7 @@ export function WorkspaceSidebar({
   if (collapsed) {
     return (
       <aside className="sidebar collapsed">
-        <button className="icon-button" onClick={onToggleCollapse} title="Expand sidebar">
+        <button className="icon-button" onClick={onToggleCollapse} title={t("sidebar.expand")}>
           »
         </button>
         <div className="rail-workspaces">
@@ -79,7 +81,7 @@ export function WorkspaceSidebar({
           ))}
         </div>
         <div className="rail-footer">
-          <button className="icon-button" onClick={onOpenSettings} title="AI Providers">
+          <button className="icon-button" onClick={onOpenSettings} title={t("sidebar.providers")}>
             ⚙
           </button>
         </div>
@@ -92,9 +94,9 @@ export function WorkspaceSidebar({
       <div className="sidebar-header">
         <div>
           <h1>Codebase Notebook</h1>
-          <p className="tagline">Local-first · source-grounded</p>
+          <p className="tagline">{t("app.tagline")}</p>
         </div>
-        <button className="icon-button" onClick={onToggleCollapse} title="Collapse sidebar">
+        <button className="icon-button" onClick={onToggleCollapse} title={t("sidebar.collapse")}>
           «
         </button>
       </div>
@@ -104,7 +106,7 @@ export function WorkspaceSidebar({
           <input
             autoFocus
             value={name}
-            placeholder="Workspace name"
+            placeholder={t("sidebar.workspaceName")}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void create();
@@ -112,12 +114,12 @@ export function WorkspaceSidebar({
             }}
           />
           <button className="primary" onClick={() => void create()} disabled={!name.trim()}>
-            Add
+            {t("sidebar.add")}
           </button>
         </div>
       ) : (
         <button className="primary" onClick={() => setAdding(true)}>
-          + Add workspace
+          {t("sidebar.addWorkspace")}
         </button>
       )}
 
@@ -130,7 +132,7 @@ export function WorkspaceSidebar({
             {ws.id === selectedId && (
               <div className="session-nav">
                 <button className="new-chat" onClick={onNewChat}>
-                  + New chat
+                  {t("sidebar.newChat")}
                 </button>
                 <ul>
                   {sessions.map((session) => (
@@ -160,7 +162,7 @@ export function WorkspaceSidebar({
                           <span className="session-label">{session.title}</span>
                           <span className="session-actions">
                             <button
-                              title="Rename"
+                              title={t("sidebar.rename")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setRenamingId(session.id);
@@ -170,10 +172,10 @@ export function WorkspaceSidebar({
                               ✎
                             </button>
                             <button
-                              title="Delete"
+                              title={t("sidebar.delete")}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`Delete chat "${session.title}"?`)) {
+                                if (confirm(t("sidebar.deleteChatConfirm", { title: session.title }))) {
                                   void onDeleteSession(session.id);
                                 }
                               }}
@@ -185,21 +187,21 @@ export function WorkspaceSidebar({
                       )}
                     </li>
                   ))}
-                  {sessions.length === 0 && <li className="empty">No chats yet</li>}
+                  {sessions.length === 0 && <li className="empty">{t("sidebar.noChats")}</li>}
                 </ul>
               </div>
             )}
           </li>
         ))}
         {workspaces.length === 0 && (
-          <li className="empty">Create a workspace to start.</li>
+          <li className="empty">{t("sidebar.createToStart")}</li>
         )}
       </ul>
 
       {error && <div className="error">{error}</div>}
 
       <div className="sidebar-footer">
-        <button onClick={onOpenSettings}>⚙ AI Providers</button>
+        <button onClick={onOpenSettings}>{t("sidebar.providers")}</button>
         {version && <span className="app-version">v{version}</span>}
       </div>
     </aside>

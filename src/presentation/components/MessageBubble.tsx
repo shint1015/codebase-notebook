@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Message } from "../../domain/types";
@@ -20,6 +21,7 @@ export function MessageBubble({
   const [openCitation, setOpenCitation] = useState<number | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
 
   const copy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -30,10 +32,10 @@ export function MessageBubble({
   return (
     <div className={`message ${message.role}`}>
       <div className="message-actions">
-        <button title={copied ? "Copied" : "Copy message"} onClick={() => void copy()}>
+        <button title={copied ? t("chat.copied") : t("chat.copyMessage")} onClick={() => void copy()}>
           {copied ? "✓" : "⧉"}
         </button>
-        <button title="Fork the chat from here" onClick={() => onFork(message.id)}>
+        <button title={t("chat.forkHere")} onClick={() => onFork(message.id)}>
           ⑂
         </button>
       </div>
@@ -79,14 +81,14 @@ export function MessageBubble({
                     <span className="citation-open-group">
                       <button
                         className="citation-open"
-                        title="Open in the in-app code editor"
+                        title={t("citation.openInApp")}
                         onClick={() => onOpenSource(c.rel_path, c.start_line)}
                       >
-                        Open
+                        {t("citation.open")}
                       </button>
                       <button
                         className="citation-open"
-                        title="Open in your external editor"
+                        title={t("citation.openExternal")}
                         onClick={() => {
                           setRevealError(null);
                           api

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Repository } from "../../domain/types";
 import { api } from "../../infrastructure/api";
 import { isCommandError } from "../../domain/types";
@@ -14,6 +15,7 @@ const isWiki = (repo: Repository) =>
 
 /** Outbound side: create GitHub issues and wiki pages (explicit action only). */
 export function PublishPanel({ repositories, onWikiPublished }: Props) {
+  const { t } = useTranslation();
   const wikis = repositories.filter(isWiki);
 
   // --- issue form ---
@@ -38,7 +40,7 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
     try {
       const url = await api.createGithubIssue(issueSpec, issueTitle, issueBody);
       setIssueUrl(url);
-      setIssueStatus("Created:");
+      setIssueStatus(t("publish.created"));
       setIssueTitle("");
       setIssueBody("");
     } catch (e) {
@@ -55,7 +57,7 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
     setWikiStatus(null);
     try {
       const file = await api.writeWikiPage(repoId, wikiTitle, wikiContent);
-      setWikiStatus(`Published ${file} — re-indexing…`);
+      setWikiStatus(t("publish.published", { file }));
       setWikiTitle("");
       setWikiContent("");
       onWikiPublished();
@@ -69,11 +71,11 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
   return (
     <section className="home-section">
       <div className="home-section-header">
-        <h3>Publish</h3>
+        <h3>{t("publish.title")}</h3>
       </div>
       <div className="publish-grid">
         <div className="publish-card">
-          <h4>New GitHub issue</h4>
+          <h4>{t("publish.newIssue")}</h4>
           <input
             value={issueSpec}
             placeholder="owner/repo"
@@ -81,12 +83,12 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
           />
           <input
             value={issueTitle}
-            placeholder="Issue title"
+            placeholder={t("publish.issueTitle")}
             onChange={(e) => setIssueTitle(e.target.value)}
           />
           <textarea
             value={issueBody}
-            placeholder="Issue body (markdown)"
+            placeholder={t("publish.issueBody")}
             rows={5}
             onChange={(e) => setIssueBody(e.target.value)}
           />
@@ -96,7 +98,7 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
               disabled={issueBusy || !issueSpec.trim() || !issueTitle.trim()}
               onClick={() => void createIssue()}
             >
-              {issueBusy ? "Creating…" : "Create issue"}
+              {issueBusy ? t("publish.creating") : t("publish.createIssue")}
             </button>
             {issueStatus && (
               <span className="provider-status">
@@ -112,12 +114,9 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
         </div>
 
         <div className="publish-card">
-          <h4>New wiki page</h4>
+          <h4>{t("publish.newWikiPage")}</h4>
           {wikis.length === 0 ? (
-            <p className="settings-note">
-              Clone a wiki first (git URL ending in <code>.wiki.git</code>) to
-              publish pages.
-            </p>
+            <p className="settings-note">{t("publish.wikiNote")}</p>
           ) : (
             <>
               <select
@@ -132,12 +131,12 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
               </select>
               <input
                 value={wikiTitle}
-                placeholder="Page title (e.g. Deployment Guide)"
+                placeholder={t("publish.pageTitle")}
                 onChange={(e) => setWikiTitle(e.target.value)}
               />
               <textarea
                 value={wikiContent}
-                placeholder="Page content (markdown)"
+                placeholder={t("publish.pageContent")}
                 rows={5}
                 onChange={(e) => setWikiContent(e.target.value)}
               />
@@ -147,7 +146,7 @@ export function PublishPanel({ repositories, onWikiPublished }: Props) {
                   disabled={wikiBusy || !wikiTitle.trim() || !wikiContent.trim()}
                   onClick={() => void publishWiki()}
                 >
-                  {wikiBusy ? "Publishing…" : "Publish page"}
+                  {wikiBusy ? t("publish.publishing") : t("publish.publishPage")}
                 </button>
                 {wikiStatus && <span className="provider-status">{wikiStatus}</span>}
               </div>

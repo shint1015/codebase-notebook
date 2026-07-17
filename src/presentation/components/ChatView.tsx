@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import type {
   ChatSession,
@@ -33,6 +34,7 @@ export function ChatView({
   onOpenSource,
   onBack,
 }: Props) {
+  const { t } = useTranslation();
   const chat = useChat(workspace.id, session?.id ?? null, onSessionCreated);
   const [input, setInput] = useState("");
   const [provider, setProvider] = useState<ProviderKind>("ollama");
@@ -70,16 +72,16 @@ export function ChatView({
     if (!session) return;
     const md = await api.chatMarkdown(session.id);
     await navigator.clipboard.writeText(md);
-    setActionStatus("Copied to clipboard");
+    setActionStatus(t("chat.copied"));
     setTimeout(() => setActionStatus(null), 2000);
   };
 
   const documentize = async () => {
     if (!session) return;
-    const title = prompt("Save chat as document — title:", session.title);
+    const title = prompt(t("chat.docTitlePrompt"), session.title);
     if (!title) return;
     await api.chatToDocument(workspace.id, session.id, title);
-    setActionStatus("Saved as document");
+    setActionStatus(t("chat.savedAsDoc"));
     setTimeout(() => setActionStatus(null), 2000);
     onDocumentized();
   };
@@ -88,11 +90,11 @@ export function ChatView({
     <main className="chat">
       <header className="chat-header">
         <div className="chat-title">
-          <button onClick={onBack} title="Back to workspace">
+          <button onClick={onBack} title={t("chat.back")}>
             ←
           </button>
           <div>
-            <h2>{session?.title ?? "New chat"}</h2>
+            <h2>{session?.title ?? t("chat.newChat")}</h2>
             <span className="workspace-path">{workspace.name}</span>
           </div>
         </div>
@@ -100,14 +102,14 @@ export function ChatView({
           {actionStatus && <span className="action-status">{actionStatus}</span>}
           {session && chat.messages.length > 0 && (
             <>
-              <button title="Copy the whole transcript" onClick={() => void copy()}>
-                ⧉ Copy
+              <button title={t("chat.copyTitle")} onClick={() => void copy()}>
+                {t("chat.copy")}
               </button>
-              <button title="Save chat as an in-app document" onClick={() => void documentize()}>
-                ▤ Save as doc
+              <button title={t("chat.saveAsDocTitle")} onClick={() => void documentize()}>
+                {t("chat.saveAsDoc")}
               </button>
               <button
-                title="Export chat as a markdown file"
+                title={t("chat.exportTitle")}
                 onClick={async () => {
                   const dest = await save({
                     defaultPath: `${session.title.slice(0, 40)}.md`,
@@ -116,7 +118,7 @@ export function ChatView({
                   if (dest) await api.exportChat(session.id, dest);
                 }}
               >
-                ⤓ Export
+                {t("chat.export")}
               </button>
             </>
           )}
@@ -124,7 +126,7 @@ export function ChatView({
             className="provider-select"
             value={provider}
             onChange={(e) => setProvider(e.target.value as ProviderKind)}
-            title="Model provider for this chat"
+            title={t("chat.providerTitle")}
           >
             {enabled.map((p) => (
               <option key={p.kind} value={p.kind}>
@@ -139,9 +141,9 @@ export function ChatView({
       <div className="messages">
         {chat.messages.length === 0 && !chat.busy && (
           <div className="chat-hint">
-            Ask about this workspace — answers cite the indexed sources.
+            {t("chat.hint")}
             <br />
-            Local model by default; external providers always ask before sending.
+            {t("chat.hintLocal")}
           </div>
         )}
         {chat.messages.map((m) => (
@@ -155,7 +157,7 @@ export function ChatView({
                     title={event.result}
                   >
                     {event.blocked ? "⛔" : "🛠"} {event.summary}
-                    {event.blocked && " (needs approval)"}
+                    {event.blocked && t("chat.needsApproval")}
                   </div>
                 ))}
               </div>
@@ -170,7 +172,7 @@ export function ChatView({
         ))}
         {chat.streamingText !== null &&
           (chat.streamingText === "" ? (
-            <div className="thinking">Thinking…</div>
+            <div className="thinking">{t("chat.thinking")}</div>
           ) : (
             <div className="message assistant streaming">
               <div className="message-content">{chat.streamingText}</div>
@@ -187,20 +189,20 @@ export function ChatView({
             checked={agentMode}
             onChange={(e) => setAgentMode(e.target.checked)}
           />
-          🛠 Agent mode
+          {t("chat.agentMode")}
         </label>
         {agentMode && (
           <>
-            <label className="agent-toggle" title="Let the agent create issues / write wiki pages">
+            <label className="agent-toggle" title={t("chat.allowActionsTitle")}>
               <input
                 type="checkbox"
                 checked={allowWrites}
                 onChange={(e) => setAllowWrites(e.target.checked)}
               />
-              Allow actions (create issues, write wiki)
+              {t("chat.allowActions")}
             </label>
             <span className="agent-hint">
-              The agent can search sources and take the enabled actions.
+              {t("chat.agentHint")}
             </span>
           </>
         )}
@@ -209,11 +211,7 @@ export function ChatView({
       <footer className="composer">
         <textarea
           value={input}
-          placeholder={
-            agentMode
-              ? "Tell the agent what to do… (Ctrl+Enter or ⌘+Enter)"
-              : "Ask about your code and docs… (Ctrl+Enter or ⌘+Enter to send)"
-          }
+          placeholder={agentMode ? t("chat.placeholderAgent") : t("chat.placeholder")}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (
@@ -232,7 +230,7 @@ export function ChatView({
           disabled={chat.busy || !input.trim()}
           onClick={() => void submit()}
         >
-          Send
+          {t("chat.send")}
         </button>
       </footer>
 
