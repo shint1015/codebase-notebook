@@ -1,6 +1,6 @@
 [package]
 name = "codebase-notebook"
-version = "0.14.0-dev.0"
+version = "0.14.0"
 description = "Local-first, source-grounded knowledge notebook for engineers"
 authors = ["spcsft"]
 license = "MIT"

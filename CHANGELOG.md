@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-17
+
 ### Added
 
 - Japanese UI. The language follows your OS locale and can be switched in
