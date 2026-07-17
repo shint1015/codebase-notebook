@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- In-app code editor (CodeMirror 6) with syntax highlighting and line numbers.
+  Citations now have an **Open** button that opens the cited file inside the
+  app at the right line — editable and saveable — alongside the existing
+  "open externally" action. The document editor uses it too (markdown
+  highlighting).
+
+### Fixed
+
+- Citation paths are now confined to their repository: a crafted path such as
+  `repo/../../etc/passwd` is rejected instead of resolving outside the source
+  root (this guards the new file read/write commands).
+
 ## [0.12.0] - 2026-07-17
 
 ### Added

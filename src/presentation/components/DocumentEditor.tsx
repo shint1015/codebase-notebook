@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import type { Workspace } from "../../domain/types";
 import { api } from "../../infrastructure/api";
 import { isCommandError } from "../../domain/types";
+import { CodeEditor } from "./CodeEditor";
 
 interface Props {
   workspace: Workspace;
@@ -62,20 +63,14 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
     </div>
   );
   const editor = (
-    <textarea
-      className="doc-textarea"
+    <CodeEditor
       value={content}
-      spellCheck={false}
-      onChange={(e) => {
-        setContent(e.target.value);
+      fileName={`${title || "untitled"}.md`}
+      onChange={(next) => {
+        setContent(next);
         setDirty(true);
       }}
-      onKeyDown={(e) => {
-        if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          void save();
-        }
-      }}
+      onSave={() => void save()}
     />
   );
 

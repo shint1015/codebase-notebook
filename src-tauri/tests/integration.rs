@@ -620,6 +620,50 @@ async fn forking_a_chat_duplicates_its_messages() {
 }
 
 #[tokio::test]
+async fn source_files_are_readable_writable_and_contained() {
+    let h = setup().await;
+
+    // The seeded repo is registered under its folder name.
+    let repos = h.repositories.list(&h.workspace_id).unwrap();
+    let repo_name = repos[0].name.clone();
+
+    // Read a real file through its citation-style path.
+    let rel = format!("{repo_name}/src/auth.rs");
+    let content = h.repositories.read_source_file(&h.workspace_id, &rel).unwrap();
+    assert!(content.contains("validate_token"));
+
+    // Write it back with an edit.
+    let edited = content.replace("validate_token", "verify_token");
+    h.repositories
+        .write_source_file(&h.workspace_id, &rel, &edited)
+        .unwrap();
+    assert!(h
+        .repositories
+        .read_source_file(&h.workspace_id, &rel)
+        .unwrap()
+        .contains("verify_token"));
+
+    // Path traversal out of the repository must be refused.
+    let escape = format!("{repo_name}/../../../../../../etc/passwd");
+    assert!(
+        h.repositories
+            .read_source_file(&h.workspace_id, &escape)
+            .is_err(),
+        "must not read outside the repository"
+    );
+    assert!(h
+        .repositories
+        .write_source_file(&h.workspace_id, &escape, "pwned")
+        .is_err());
+
+    // Unknown repositories are refused too.
+    assert!(h
+        .repositories
+        .read_source_file(&h.workspace_id, "nope/file.rs")
+        .is_err());
+}
+
+#[tokio::test]
 async fn in_app_notes_are_saved_and_indexed() {
     use codebase_notebook_lib::application::usecases::notes::NotesUseCases;
 
