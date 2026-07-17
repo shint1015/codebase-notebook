@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Auto-update: the app checks GitHub Releases on startup and offers a
+  one-click "Update & restart". Updates are cryptographically signed and
+  verified before installing; the check never blocks the app and nothing is
+  installed without the user clicking.
+
+### Added
+
 - In-app code editor (CodeMirror 6) with syntax highlighting and line numbers.
   Citations now have an **Open** button that opens the cited file inside the
   app at the right line — editable and saveable — alongside the existing

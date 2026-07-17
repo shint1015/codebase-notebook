@@ -29,6 +29,36 @@ body {
   overflow: hidden;
 }
 
+/* ---------- update banner ---------- */
+
+/* Spans the window above everything else so an update is never missed. */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--accent-dim);
+  color: #fff;
+  font-size: 12px;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-progress {
+  font-family: ui-monospace, monospace;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {

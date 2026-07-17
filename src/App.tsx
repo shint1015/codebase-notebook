@@ -11,6 +11,7 @@ import { ChatView } from "./presentation/components/ChatView";
 import { DocumentEditor } from "./presentation/components/DocumentEditor";
 import { SourceEditor } from "./presentation/components/SourceEditor";
 import { SettingsView } from "./presentation/components/SettingsView";
+import { UpdateBanner } from "./presentation/components/UpdateBanner";
 
 type View =
   | { kind: "home" }
@@ -40,6 +41,7 @@ function App() {
 
   return (
     <div className="app">
+      <UpdateBanner />
       <WorkspaceSidebar
         workspaces={ws.workspaces}
         selectedId={ws.selectedId}
