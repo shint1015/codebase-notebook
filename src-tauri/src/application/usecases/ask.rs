@@ -274,7 +274,7 @@ impl AskUseCase {
         self.chats.append_message(&user_message)?;
 
         let repositories = self.repositories.list_by_workspace(workspace_id)?;
-        let system = build_system_prompt(&workspace.name, &repositories, &hits);
+        let system = build_system_prompt(&workspace.name, &workspace.instructions, &repositories, &hits);
         let mut turns = history;
         turns.push(ChatTurn::user(question));
 
@@ -367,6 +367,7 @@ impl AskUseCase {
 /// sources (NotebookLM-style).
 fn build_system_prompt(
     workspace_name: &str,
+    instructions: &str,
     repositories: &[Repository],
     hits: &[SearchHit],
 ) -> String {
@@ -391,7 +392,13 @@ fn build_system_prompt(
             None => prompt.push_str(&format!("- {} (local folder)\n", repository.name)),
         }
     }
-    prompt.push('\n');
+    // The user's own instructions come last so they can override defaults.
+    if !instructions.trim().is_empty() {
+        prompt.push_str(&format!(
+            "Workspace instructions from the user (follow these):\n{}\n\n",
+            instructions.trim()
+        ));
+    }
     if hits.is_empty() {
         prompt.push_str("No sources were retrieved for this question.\n");
         return prompt;
@@ -526,10 +533,11 @@ mod tests {
             source_kind: crate::domain::entities::repository::SourceKind::Git,
             created_at: "2026-01-01T00:00:00Z".into(),
         }];
-        let prompt = build_system_prompt("demo", &repositories, &hits);
+        let prompt = build_system_prompt("demo", "Always answer in Japanese.", &repositories, &hits);
         assert!(prompt.contains("Workspace: demo"));
         assert!(prompt.contains("- backend (cloned from https://github.com/org/backend.git)"));
         assert!(prompt.contains("[1] src/a.rs"));
         assert!(prompt.contains("fn main() {}"));
+        assert!(prompt.contains("Always answer in Japanese."));
     }
 }

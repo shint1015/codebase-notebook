@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Workspace instructions: custom instructions appended to the system prompt
+  for every answer in that workspace (conventions, language, priorities).
+- Workspace export/import: save a workspace's sources, notes, chats and
+  instructions to a JSON file and restore it elsewhere. The index is derived
+  data and is rebuilt by re-indexing after import; imported workspaces never
+  inherit external-send permission.
+
 ## [0.15.0] - 2026-07-17
 
 ### Added

@@ -1435,3 +1435,10 @@ textarea:focus {
   background: var(--bg-raised);
   color: var(--accent);
 }
+
+.instructions-input {
+  width: 100%;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.5;
+}

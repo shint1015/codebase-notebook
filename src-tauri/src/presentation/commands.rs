@@ -510,6 +510,53 @@ pub fn write_source_file(
         .write_source_file(&workspace_id, &rel_path, &content)?)
 }
 
+#[tauri::command]
+pub fn set_workspace_instructions(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    instructions: String,
+) -> CommandResult<()> {
+    Ok(state
+        .workspaces
+        .set_instructions(&workspace_id, &instructions)?)
+}
+
+// ---- backup / export ----
+
+#[tauri::command]
+pub fn export_workspace(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    dest_path: String,
+) -> CommandResult<()> {
+    let export = state.backup.export(&workspace_id)?;
+    let json = serde_json::to_string_pretty(&export).map_err(|e| CommandError {
+        code: "storage".into(),
+        message: format!("serialize export: {e}"),
+    })?;
+    std::fs::write(&dest_path, json).map_err(|e| CommandError {
+        code: "storage".into(),
+        message: format!("write export: {e}"),
+    })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn import_workspace(
+    state: State<'_, AppState>,
+    src_path: String,
+) -> CommandResult<String> {
+    let json = std::fs::read_to_string(&src_path).map_err(|e| CommandError {
+        code: "storage".into(),
+        message: format!("read export: {e}"),
+    })?;
+    let export = serde_json::from_str(&json).map_err(|e| CommandError {
+        code: "validation".into(),
+        message: format!("not a valid workspace export: {e}"),
+    })?;
+    Ok(state.backup.import(export)?)
+}
+
 // ---- notes / in-app documents ----
 
 #[tauri::command]

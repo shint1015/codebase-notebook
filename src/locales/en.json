@@ -174,5 +174,16 @@
     "settings": "Open AI Providers",
     "noResults": "No results",
     "hint": "↑↓ to navigate · Enter to select · Esc to close"
+  },
+  "workspace": {
+    "instructions": "Workspace instructions",
+    "instructionsHint": "Custom instructions for every answer in this workspace (conventions, tone, what to prioritise).",
+    "instructionsPlaceholder": "e.g. Answer in Japanese. Prefer examples from the backend repo.",
+    "saved": "Saved",
+    "backup": "Backup",
+    "export": "⤓ Export workspace",
+    "exportHint": "Saves sources, notes, chats and instructions as JSON (the index is rebuilt on import).",
+    "import": "⤒ Import workspace",
+    "imported": "Imported — re-index to rebuild its search index."
   }
 }
