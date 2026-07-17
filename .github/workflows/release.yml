@@ -1,0 +1,97 @@
+name: Release
+
+# Builds installers for macOS (Apple Silicon + Intel), Windows and Linux when a
+# vX.Y.Z tag is pushed, and attaches them to a draft GitHub Release.
+# Everything here runs on free public-repo runners; builds are unsigned.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            target: ""
+            args: ""
+          - platform: windows-latest
+            target: ""
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            build-essential \
+            patchelf \
+            file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Codebase Notebook ${{ github.ref_name }}"
+          releaseBody: |
+            See [CHANGELOG.md](https://github.com/shint1015/codebase-notebook/blob/main/CHANGELOG.md) for what's new.
+
+            ### Install
+
+            Download the installer for your platform below.
+
+            **These builds are unsigned** (code-signing certificates cost money,
+            and this project is free):
+
+            - **macOS** — the first launch is blocked by Gatekeeper. Right-click
+              the app → *Open* → *Open*, or run:
+              `xattr -cr "/Applications/Codebase Notebook.app"`
+            - **Windows** — SmartScreen shows a warning: *More info* → *Run anyway*.
+
+            ### Requirements
+
+            For offline answers, install [Ollama](https://ollama.com) and pull a model:
+
+            ```
+            ollama pull qwen2.5-coder:14b
+            ollama pull nomic-embed-text
+            ```
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
