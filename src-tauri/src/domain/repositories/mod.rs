@@ -46,6 +46,16 @@ pub trait DocumentRepository: Send + Sync {
         workspace_id: &str,
     ) -> DomainResult<Vec<(String, Vec<f32>)>>;
     fn hits_by_chunk_ids(&self, chunk_ids: &[String]) -> DomainResult<Vec<SearchHit>>;
+    /// Every chunk of one document, by its workspace-relative path. Backs
+    /// `@file` mentions, which pin a file into the prompt regardless of search.
+    fn hits_by_rel_path(
+        &self,
+        workspace_id: &str,
+        rel_path: &str,
+        limit: usize,
+    ) -> DomainResult<Vec<SearchHit>>;
+    /// Indexed document paths of a workspace (for @-mention autocomplete).
+    fn list_rel_paths(&self, workspace_id: &str) -> DomainResult<Vec<String>>;
 }
 
 pub trait ChatRepository: Send + Sync {
@@ -56,6 +66,26 @@ pub trait ChatRepository: Send + Sync {
     fn delete_session(&self, session_id: &str) -> DomainResult<()>;
     fn append_message(&self, message: &Message) -> DomainResult<()>;
     fn list_messages(&self, session_id: &str) -> DomainResult<Vec<Message>>;
+    /// Full-text-ish search across a workspace's chats. Returns matching
+    /// messages with their session, newest first.
+    fn search_messages(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> DomainResult<Vec<ChatSearchHit>>;
+}
+
+/// A message that matched a chat search, with the session it belongs to.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ChatSearchHit {
+    pub session_id: String,
+    pub session_title: String,
+    pub message_id: String,
+    pub role: String,
+    /// Short excerpt around the match.
+    pub excerpt: String,
+    pub created_at: String,
 }
 
 pub trait ProviderConfigRepository: Send + Sync {

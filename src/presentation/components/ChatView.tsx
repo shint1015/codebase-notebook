@@ -12,6 +12,7 @@ import { useChat } from "../../application/useChat";
 import { api } from "../../infrastructure/api";
 import { ConsentDialog } from "./ConsentDialog";
 import { MessageBubble } from "./MessageBubble";
+import { MentionInput } from "./MentionInput";
 
 interface Props {
   workspace: Workspace;
@@ -55,6 +56,12 @@ export function ChatView({
   }, [chat.messages.length, chat.busy, chat.streamingText]);
 
   const [actionStatus, setActionStatus] = useState<string | null>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+
+  // Indexed paths back the composer's @-mention autocomplete.
+  useEffect(() => {
+    api.listSourcePaths(workspace.id).then(setPaths).catch(() => setPaths([]));
+  }, [workspace.id]);
 
   const submit = async () => {
     const question = input;
@@ -209,21 +216,13 @@ export function ChatView({
       </div>
 
       <footer className="composer">
-        <textarea
+        <MentionInput
           value={input}
           placeholder={agentMode ? t("chat.placeholderAgent") : t("chat.placeholder")}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              (e.ctrlKey || e.metaKey) &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault();
-              if (!chat.busy && input.trim()) void submit();
-            }
-          }}
-          rows={2}
+          disabled={chat.busy}
+          paths={paths}
+          onChange={setInput}
+          onSubmit={() => void submit()}
         />
         <button
           className="primary"

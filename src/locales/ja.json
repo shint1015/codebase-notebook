@@ -163,5 +163,15 @@
     "downloadingSize": "ダウンロード中… {{size}} MB",
     "installing": "インストール中…",
     "restarting": "再起動中…"
+  },
+  "palette": {
+    "placeholder": "チャットを検索、またはコマンドを実行…",
+    "newChat": "新しいチャット",
+    "newDocument": "新規ドキュメント",
+    "index": "このワークスペースをインデックス",
+    "home": "ワークスペースのホームへ",
+    "settings": "AIプロバイダを開く",
+    "noResults": "結果がありません",
+    "hint": "↑↓ で移動 · Enter で決定 · Esc で閉じる"
   }
 }

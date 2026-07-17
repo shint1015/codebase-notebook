@@ -9,6 +9,61 @@ pub struct SqliteChatRepository {
     db: Db,
 }
 
+/// A short window of `content` centred on the first case-insensitive match,
+/// so search results show why they matched. Char-based, so it never splits a
+/// multi-byte character.
+fn excerpt_around(content: &str, needle_lower: &str) -> String {
+    const WINDOW: usize = 80;
+    let chars: Vec<char> = content.chars().collect();
+    let lower: Vec<char> = content.to_lowercase().chars().collect();
+    let needle: Vec<char> = needle_lower.chars().collect();
+    let at = if needle.is_empty() {
+        Some(0)
+    } else {
+        lower.windows(needle.len()).position(|w| w == needle.as_slice())
+    };
+    let Some(at) = at else {
+        return chars.iter().take(WINDOW * 2).collect();
+    };
+    let start = at.saturating_sub(WINDOW);
+    let end = (at + needle.len() + WINDOW).min(chars.len());
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.extend(&chars[start..end]);
+    if end < chars.len() {
+        out.push('…');
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::excerpt_around;
+
+    #[test]
+    fn excerpt_centres_on_the_match() {
+        let content = format!("{}NEEDLE{}", "a".repeat(200), "b".repeat(200));
+        let excerpt = excerpt_around(&content, "needle");
+        assert!(excerpt.contains("NEEDLE"));
+        assert!(excerpt.starts_with('…') && excerpt.ends_with('…'));
+        assert!(excerpt.chars().count() < 200);
+    }
+
+    #[test]
+    fn excerpt_handles_multibyte_without_panicking() {
+        let content = "これは認証トークンを検証する処理です。".repeat(10);
+        let excerpt = excerpt_around(&content, "トークン");
+        assert!(excerpt.contains("トークン"));
+    }
+
+    #[test]
+    fn missing_needle_falls_back_to_the_head() {
+        assert!(excerpt_around("hello world", "zzz").starts_with("hello"));
+    }
+}
+
 impl SqliteChatRepository {
     pub fn new(db: Db) -> Self {
         Self { db }
@@ -131,6 +186,48 @@ impl ChatRepository for SqliteChatRepository {
             )
             .map_err(storage_err("insert message"))?;
         Ok(())
+    }
+
+    fn search_messages(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> DomainResult<Vec<crate::domain::repositories::ChatSearchHit>> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+        // LIKE is enough here: chats are small compared to the source index,
+        // and it keeps substring matching predictable across languages.
+        let pattern = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
+        let conn = self.db.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT m.id, m.session_id, s.title, m.role, m.content, m.created_at
+                 FROM messages m
+                 JOIN chat_sessions s ON s.id = m.session_id
+                 WHERE s.workspace_id = ?1 AND m.content LIKE ?2 ESCAPE '\\'
+                 ORDER BY m.created_at DESC
+                 LIMIT ?3",
+            )
+            .map_err(storage_err("prepare chat search"))?;
+        let needle = query.to_lowercase();
+        let rows = stmt
+            .query_map(params![workspace_id, pattern, limit as i64], |row| {
+                let content: String = row.get(4)?;
+                Ok(crate::domain::repositories::ChatSearchHit {
+                    message_id: row.get(0)?,
+                    session_id: row.get(1)?,
+                    session_title: row.get(2)?,
+                    role: row.get(3)?,
+                    excerpt: excerpt_around(&content, &needle),
+                    created_at: row.get(5)?,
+                })
+            })
+            .map_err(storage_err("chat search"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(storage_err("read chat search"))
     }
 
     fn list_messages(&self, session_id: &str) -> DomainResult<Vec<Message>> {
