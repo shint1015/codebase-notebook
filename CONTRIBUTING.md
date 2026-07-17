@@ -47,3 +47,24 @@ Day-to-day on `develop`: add CHANGELOG notes under `[Unreleased]` as you work;
 run `npm run version:dev` whenever you want a new distinguishable dev build.
 The SQLite schema is versioned independently via `PRAGMA user_version`
 migrations in `src-tauri/src/infrastructure/persistence/mod.rs` (append-only).
+
+## Update signing key
+
+Releases are signed so the in-app updater can verify them. The keypair was
+generated with `tauri signer generate`:
+
+- **Public key** — committed in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
+- **Private key** — stored as the repo secret `TAURI_SIGNING_PRIVATE_KEY`
+  (with `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`), used by the release workflow.
+
+⚠️ **Back the private key up.** If it is lost, already-installed apps will
+reject every future update — the only fix is asking users to reinstall by hand.
+Keep an offline copy of the key file outside the repo.
+
+Local signed build:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="$(cat /path/to/updater.key)"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+npm run tauri build
+```
