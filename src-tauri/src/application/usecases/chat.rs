@@ -85,6 +85,15 @@ impl ChatUseCases {
         self.chats.list_messages(session_id)
     }
 
+    pub fn search_messages(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> DomainResult<Vec<crate::domain::repositories::ChatSearchHit>> {
+        self.chats.search_messages(workspace_id, query, limit)
+    }
+
     /// Render a session as a markdown transcript (for export).
     pub fn export_markdown(&self, session_id: &str) -> DomainResult<String> {
         let messages = self.chats.list_messages(session_id)?;

@@ -13,6 +13,7 @@ import { DocumentEditor } from "./presentation/components/DocumentEditor";
 import { SourceEditor } from "./presentation/components/SourceEditor";
 import { SettingsView } from "./presentation/components/SettingsView";
 import { UpdateBanner } from "./presentation/components/UpdateBanner";
+import { CommandPalette } from "./presentation/components/CommandPalette";
 
 type View =
   | { kind: "home" }
@@ -28,6 +29,19 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [view, setView] = useState<View>({ kind: "home" });
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Cmd/Ctrl+K opens the command palette from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Selecting another workspace always lands on its home view.
   useEffect(() => {
@@ -131,6 +145,20 @@ function App() {
             }))
           }
           onBack={() => setView({ kind: "home" })}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          workspace={ws.selected}
+          sessions={sessions.sessions}
+          onClose={() => setPaletteOpen(false)}
+          onOpenSession={openSession}
+          onNewChat={() => setView({ kind: "chat", session: null })}
+          onNewDocument={() => setView({ kind: "doc", name: null })}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onIndex={() => ws.selected && void api.indexWorkspace(ws.selected.id)}
+          onGoHome={() => setView({ kind: "home" })}
         />
       )}
 

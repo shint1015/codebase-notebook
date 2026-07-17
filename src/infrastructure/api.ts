@@ -79,6 +79,14 @@ export const api = {
     invoke<string>("chat_to_document", { workspaceId, sessionId, title }),
   revealSource: (workspaceId: string, relPath: string, line: number) =>
     invoke<void>("reveal_source", { workspaceId, relPath, line }),
+  searchChats: (workspaceId: string, query: string, limit?: number) =>
+    invoke<import("../domain/types").ChatSearchHit[]>("search_chats", {
+      workspaceId,
+      query,
+      limit,
+    }),
+  listSourcePaths: (workspaceId: string) =>
+    invoke<string[]>("list_source_paths", { workspaceId }),
   readSourceFile: (workspaceId: string, relPath: string) =>
     invoke<string>("read_source_file", { workspaceId, relPath }),
   writeSourceFile: (workspaceId: string, relPath: string, content: string) =>

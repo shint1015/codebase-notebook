@@ -17,6 +17,9 @@ use crate::domain::repositories::{
 use crate::domain::services::{ChatTurn, ProviderRouter, TokenSink};
 
 const RETRIEVE_LIMIT: usize = 8;
+/// Chunks pulled in per `@file` mention. Mentions are explicit user intent, so
+/// they get their own budget on top of search results.
+const MENTION_CHUNK_LIMIT: usize = 6;
 /// Recent turns replayed to the model for conversational context.
 const HISTORY_TURNS: usize = 6;
 
@@ -107,6 +110,33 @@ impl AskUseCase {
         Ok(())
     }
 
+    /// Retrieve sources for a question: chunks of every `@mentioned` file
+    /// (explicit user intent, always included) followed by search results,
+    /// de-duplicated.
+    async fn collect_hits(
+        &self,
+        workspace_id: &str,
+        question: &str,
+        query: &str,
+    ) -> DomainResult<Vec<SearchHit>> {
+        let mut hits: Vec<SearchHit> = Vec::new();
+        for path in mentioned_paths(question) {
+            hits.extend(
+                self.documents
+                    .hits_by_rel_path(workspace_id, &path, MENTION_CHUNK_LIMIT)?,
+            );
+        }
+        let seen: std::collections::HashSet<String> =
+            hits.iter().map(|h| h.chunk.id.clone()).collect();
+        let remaining = RETRIEVE_LIMIT.saturating_sub(hits.len()).max(2);
+        for hit in self.search.execute(workspace_id, query, remaining).await? {
+            if !seen.contains(&hit.chunk.id) {
+                hits.push(hit);
+            }
+        }
+        Ok(hits)
+    }
+
     /// Rewrite a follow-up question into a standalone retrieval query using
     /// the conversation. Always runs on the LOCAL model — history must never
     /// reach an external provider before the consent gate. Any failure falls
@@ -158,10 +188,7 @@ impl AskUseCase {
         self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
         let query = self.retrieval_query(session_id, question).await;
-        let hits = self
-            .search
-            .execute(workspace_id, &query, RETRIEVE_LIMIT)
-            .await?;
+        let hits = self.collect_hits(workspace_id, question, &query).await?;
         let is_external = provider.is_external();
         Ok(AskPreparation {
             provider,
@@ -230,10 +257,7 @@ impl AskUseCase {
         }
 
         let query = self.retrieval_query(Some(session_id), question).await;
-        let hits = self
-            .search
-            .execute(workspace_id, &query, RETRIEVE_LIMIT)
-            .await?;
+        let hits = self.collect_hits(workspace_id, question, &query).await?;
 
         let history = self.recent_history(session_id)?;
 
@@ -386,6 +410,22 @@ fn build_system_prompt(
     prompt
 }
 
+/// Extract `@path/to/file` mentions from a question. A mention runs until
+/// whitespace; trailing punctuation is trimmed so "@src/a.rs?" still resolves.
+fn mentioned_paths(question: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    for token in question.split_whitespace() {
+        let Some(rest) = token.strip_prefix('@') else {
+            continue;
+        };
+        let path = rest.trim_end_matches(|c: char| matches!(c, '?' | '!' | ',' | '.' | ':' | ';' | ')' | '、' | '。'));
+        if !path.is_empty() && !paths.iter().any(|p| p == path) {
+            paths.push(path.to_string());
+        }
+    }
+    paths
+}
+
 /// Map bracket markers like [1] in the answer back to the retrieved chunks.
 fn extract_citations(answer: &str, hits: &[SearchHit]) -> Vec<Citation> {
     let mut seen = std::collections::BTreeSet::new();
@@ -443,6 +483,19 @@ mod tests {
             rel_path: path.to_string(),
             score: 1.0,
         }
+    }
+
+    #[test]
+    fn parses_at_mentions() {
+        assert_eq!(
+            mentioned_paths("@src/auth.rs について教えて"),
+            vec!["src/auth.rs"]
+        );
+        // Trailing punctuation is not part of the path.
+        assert_eq!(mentioned_paths("what does @app/main.go do?"), vec!["app/main.go"]);
+        assert_eq!(mentioned_paths("@a.rs and @b.rs and @a.rs"), vec!["a.rs", "b.rs"]);
+        assert!(mentioned_paths("no mentions here").is_empty());
+        assert!(mentioned_paths("email me@example.com").is_empty());
     }
 
     #[test]

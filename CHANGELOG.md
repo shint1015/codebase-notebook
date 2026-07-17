@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `@file` mentions: type `@` in the composer to autocomplete indexed paths.
+  A mentioned file is pinned into the prompt regardless of what search finds,
+  so you can point the model at exact context.
+- Chat search across a workspace's whole history, with excerpts around the
+  match.
+- Command palette (Cmd/Ctrl+K): jump to a chat, search messages, or run
+  actions (new chat/document, re-index, settings).
+
 ## [0.14.0] - 2026-07-17
 
 ### Added

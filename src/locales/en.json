@@ -164,5 +164,15 @@
     "downloadingSize": "Downloading… {{size}} MB",
     "installing": "Installing…",
     "restarting": "Restarting…"
+  },
+  "palette": {
+    "placeholder": "Search chats or run a command…",
+    "newChat": "New chat",
+    "newDocument": "New document",
+    "index": "Index this workspace",
+    "home": "Go to workspace home",
+    "settings": "Open AI Providers",
+    "noResults": "No results",
+    "hint": "↑↓ to navigate · Enter to select · Esc to close"
   }
 }

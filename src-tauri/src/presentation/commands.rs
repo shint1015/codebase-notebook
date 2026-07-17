@@ -466,6 +466,27 @@ pub async fn pull_ollama_model(
     Ok(admin.pull(&model, &sink).await?)
 }
 
+#[tauri::command]
+pub fn search_chats(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    query: String,
+    limit: Option<usize>,
+) -> CommandResult<Vec<crate::domain::repositories::ChatSearchHit>> {
+    Ok(state
+        .chats
+        .search_messages(&workspace_id, &query, limit.unwrap_or(30))?)
+}
+
+/// Indexed document paths — powers `@file` autocomplete in the composer.
+#[tauri::command]
+pub fn list_source_paths(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> CommandResult<Vec<String>> {
+    Ok(state.documents.list_rel_paths(&workspace_id)?)
+}
+
 // ---- source files (in-app code editor) ----
 
 #[tauri::command]

@@ -620,6 +620,73 @@ async fn forking_a_chat_duplicates_its_messages() {
 }
 
 #[tokio::test]
+async fn at_mentions_pin_a_file_into_the_context() {
+    let h = setup().await;
+    h.index.execute(&h.workspace_id).await.unwrap();
+    let repo_name = h.repositories.list(&h.workspace_id).unwrap()[0].name.clone();
+    let mentioned = format!("{repo_name}/README.md");
+
+    // A question whose words point at auth.rs, but that @-mentions README.md.
+    let prepared = h
+        .ask
+        .prepare(
+            &h.workspace_id,
+            &format!("@{mentioned} validate_token session"),
+            ProviderKind::Ollama,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        prepared.sources.iter().any(|s| s.rel_path == mentioned),
+        "the @mentioned file must be in the context, got {:?}",
+        prepared.sources.iter().map(|s| &s.rel_path).collect::<Vec<_>>()
+    );
+    // Search results still come along.
+    assert!(prepared.sources.len() > 1);
+}
+
+#[tokio::test]
+async fn chats_are_searchable_across_sessions() {
+    let h = setup().await;
+    let db = Db::open(&h._tmp.path().join("test.sqlite")).unwrap();
+    let chat_repo = SqliteChatRepository::new(db);
+    use codebase_notebook_lib::domain::entities::chat::{Message, Role};
+
+    let a = h.chats.create_session(&h.workspace_id, "deploys").unwrap();
+    let b = h.chats.create_session(&h.workspace_id, "billing").unwrap();
+    for (session, content) in [
+        (&a, "How do we roll back a deploy?"),
+        (&b, "The billing_cron job runs nightly at 3am"),
+    ] {
+        chat_repo
+            .append_message(&Message {
+                id: uuid::Uuid::new_v4().to_string(),
+                session_id: session.id.clone(),
+                role: Role::User,
+                content: content.into(),
+                citations: Vec::new(),
+                provider: None,
+                model: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+            })
+            .unwrap();
+    }
+
+    let hits = h.chats.search_messages(&h.workspace_id, "billing_cron", 10).unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].session_id, b.id);
+    assert_eq!(hits[0].session_title, "billing");
+    assert!(hits[0].excerpt.contains("billing_cron"));
+
+    // Case-insensitive, and scoped to the workspace.
+    assert_eq!(h.chats.search_messages(&h.workspace_id, "ROLL BACK", 10).unwrap().len(), 1);
+    assert!(h.chats.search_messages("other-workspace", "billing_cron", 10).unwrap().is_empty());
+    assert!(h.chats.search_messages(&h.workspace_id, "  ", 10).unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn source_files_are_readable_writable_and_contained() {
     let h = setup().await;
 
