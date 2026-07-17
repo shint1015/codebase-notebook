@@ -12,6 +12,7 @@ import { ChatView } from "./presentation/components/ChatView";
 import { DocumentEditor } from "./presentation/components/DocumentEditor";
 import { SourceEditor } from "./presentation/components/SourceEditor";
 import { SettingsView } from "./presentation/components/SettingsView";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { UpdateBanner } from "./presentation/components/UpdateBanner";
 import { CommandPalette } from "./presentation/components/CommandPalette";
 
@@ -89,6 +90,17 @@ function App() {
           );
         }}
         onOpenSettings={() => setSettingsOpen(true)}
+        onImportWorkspace={async () => {
+          const src = await openDialog({
+            multiple: false,
+            filters: [{ name: "Workspace export", extensions: ["json"] }],
+          });
+          if (typeof src !== "string") return;
+          const id = await api.importWorkspace(src);
+          await ws.refresh();
+          ws.setSelectedId(id);
+          setView({ kind: "home" });
+        }}
       />
 
       {!ws.selected ? (

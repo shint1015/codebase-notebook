@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "../../domain/types";
 import { api } from "../../infrastructure/api";
 import { useRepositories } from "../../application/useRepositories";
@@ -28,7 +28,39 @@ export function WorkspaceHome({
   const [gitUrl, setGitUrl] = useState("");
   const [issuesSpec, setIssuesSpec] = useState("");
   const [notes, setNotes] = useState<{ name: string; updated_at: string }[]>([]);
+  const [instructions, setInstructions] = useState(workspace.instructions);
+  const [instructionsStatus, setInstructionsStatus] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const { t } = useTranslation();
+
+  useEffect(() => setInstructions(workspace.instructions), [workspace.id, workspace.instructions]);
+
+  const saveInstructions = async () => {
+    setInstructionsStatus(null);
+    try {
+      await api.setWorkspaceInstructions(workspace.id, instructions);
+      setInstructionsStatus(t("workspace.saved"));
+      setTimeout(() => setInstructionsStatus(null), 1500);
+    } catch (e) {
+      setInstructionsStatus(String(e));
+    }
+  };
+
+  const exportWorkspace = async () => {
+    const dest = await save({
+      defaultPath: `${workspace.name}.cbnb.json`,
+      filters: [{ name: "Workspace export", extensions: ["json"] }],
+    });
+    if (!dest) return;
+    setBackupStatus(null);
+    try {
+      await api.exportWorkspace(workspace.id, dest);
+      setBackupStatus(t("workspace.saved"));
+      setTimeout(() => setBackupStatus(null), 1500);
+    } catch (e) {
+      setBackupStatus(String(e));
+    }
+  };
 
   useEffect(() => {
     void api.listNotes(workspace.id).then(setNotes);
@@ -207,6 +239,39 @@ export function WorkspaceHome({
             <li className="empty">{t("home.noDocuments")}</li>
           )}
         </ul>
+      </section>
+
+      <section className="home-section">
+        <div className="home-section-header">
+          <h3>{t("workspace.instructions")}</h3>
+          <div className="index-row">
+            {instructionsStatus && (
+              <span className="index-summary">{instructionsStatus}</span>
+            )}
+            <button className="primary" onClick={() => void saveInstructions()}>
+              {t("editor.save")}
+            </button>
+          </div>
+        </div>
+        <p className="settings-note">{t("workspace.instructionsHint")}</p>
+        <textarea
+          className="instructions-input"
+          rows={3}
+          value={instructions}
+          placeholder={t("workspace.instructionsPlaceholder")}
+          onChange={(e) => setInstructions(e.target.value)}
+        />
+      </section>
+
+      <section className="home-section">
+        <div className="home-section-header">
+          <h3>{t("workspace.backup")}</h3>
+          <div className="repo-add">
+            <button onClick={() => void exportWorkspace()}>{t("workspace.export")}</button>
+            {backupStatus && <span className="index-summary">{backupStatus}</span>}
+          </div>
+        </div>
+        <p className="settings-note">{t("workspace.exportHint")}</p>
       </section>
 
       <PublishPanel

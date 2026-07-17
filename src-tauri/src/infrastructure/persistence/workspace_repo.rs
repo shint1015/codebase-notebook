@@ -21,6 +21,7 @@ fn row_to_workspace(row: &rusqlite::Row<'_>) -> rusqlite::Result<Workspace> {
         name: row.get(1)?,
         allow_external: row.get::<_, i64>(2)? != 0,
         created_at: row.get(3)?,
+        instructions: row.get(4)?,
     })
 }
 
@@ -29,13 +30,14 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO workspaces (id, name, allow_external, created_at)
-                 VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO workspaces (id, name, allow_external, created_at, instructions)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
                     workspace.id,
                     workspace.name,
                     workspace.allow_external as i64,
                     workspace.created_at,
+                    workspace.instructions,
                 ],
             )
             .map_err(storage_err("insert workspace"))?;
@@ -46,7 +48,7 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT id, name, allow_external, created_at
+                "SELECT id, name, allow_external, created_at, instructions
                  FROM workspaces WHERE id = ?1",
                 params![id],
                 row_to_workspace,
@@ -63,7 +65,7 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, allow_external, created_at
+                "SELECT id, name, allow_external, created_at, instructions
                  FROM workspaces ORDER BY created_at DESC",
             )
             .map_err(storage_err("prepare list workspaces"))?;
@@ -83,6 +85,21 @@ impl WorkspaceRepository for SqliteWorkspaceRepository {
                 params![id, allow as i64],
             )
             .map_err(storage_err("update workspace"))?;
+        if changed == 0 {
+            return Err(DomainError::NotFound(format!("workspace {id}")));
+        }
+        Ok(())
+    }
+
+    fn set_instructions(&self, id: &str, instructions: &str) -> DomainResult<()> {
+        let changed = self
+            .db
+            .lock()
+            .execute(
+                "UPDATE workspaces SET instructions = ?2 WHERE id = ?1",
+                params![id, instructions],
+            )
+            .map_err(storage_err("update instructions"))?;
         if changed == 0 {
             return Err(DomainError::NotFound(format!("workspace {id}")));
         }

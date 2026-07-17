@@ -20,6 +20,13 @@ export const api = {
   deleteWorkspace: (workspaceId: string) =>
     invoke<void>("delete_workspace", { workspaceId }),
 
+  setWorkspaceInstructions: (workspaceId: string, instructions: string) =>
+    invoke<void>("set_workspace_instructions", { workspaceId, instructions }),
+  exportWorkspace: (workspaceId: string, destPath: string) =>
+    invoke<void>("export_workspace", { workspaceId, destPath }),
+  importWorkspace: (srcPath: string) =>
+    invoke<string>("import_workspace", { srcPath }),
+
   listRepositories: (workspaceId: string) =>
     invoke<Repository[]>("list_repositories", { workspaceId }),
   addLocalRepository: (workspaceId: string, rootPath: string) =>

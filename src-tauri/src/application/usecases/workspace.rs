@@ -22,6 +22,7 @@ impl WorkspaceUseCases {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
             allow_external: false,
+            instructions: String::new(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.repo.create(&workspace)?;
@@ -38,6 +39,17 @@ impl WorkspaceUseCases {
 
     pub fn set_allow_external(&self, id: &str, allow: bool) -> DomainResult<()> {
         self.repo.set_allow_external(id, allow)
+    }
+
+    /// Custom instructions appended to this workspace's system prompt.
+    pub fn set_instructions(&self, id: &str, instructions: &str) -> DomainResult<()> {
+        const MAX: usize = 4000;
+        if instructions.chars().count() > MAX {
+            return Err(DomainError::Validation(format!(
+                "instructions are too long (max {MAX} characters)"
+            )));
+        }
+        self.repo.set_instructions(id, instructions.trim())
     }
 
     pub fn delete(&self, id: &str) -> DomainResult<()> {

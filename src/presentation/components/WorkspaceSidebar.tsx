@@ -4,6 +4,7 @@ import type { ChatSession, Workspace } from "../../domain/types";
 import { useAppVersion } from "../../application/useAppVersion";
 
 interface Props {
+  onImportWorkspace: () => void;
   workspaces: Workspace[];
   selectedId: string | null;
   sessions: ChatSession[];
@@ -33,6 +34,7 @@ export function WorkspaceSidebar({
   onRenameSession,
   onDeleteSession,
   onOpenSettings,
+  onImportWorkspace,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -201,6 +203,9 @@ export function WorkspaceSidebar({
       {error && <div className="error">{error}</div>}
 
       <div className="sidebar-footer">
+        <button onClick={onImportWorkspace} title={t("workspace.import")}>
+          ⤒
+        </button>
         <button onClick={onOpenSettings}>{t("sidebar.providers")}</button>
         {version && <span className="app-version">v{version}</span>}
       </div>

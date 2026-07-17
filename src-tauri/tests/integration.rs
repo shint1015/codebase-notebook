@@ -620,6 +620,77 @@ async fn forking_a_chat_duplicates_its_messages() {
 }
 
 #[tokio::test]
+async fn workspace_export_import_round_trips() {
+    use codebase_notebook_lib::application::usecases::backup::BackupUseCases;
+    use codebase_notebook_lib::application::usecases::notes::NotesUseCases;
+    use codebase_notebook_lib::domain::repositories::WorkspaceRepository;
+
+    let h = setup().await;
+    let db = Db::open(&h._tmp.path().join("test.sqlite")).unwrap();
+    let workspace_repo = Arc::new(SqliteWorkspaceRepository::new(db.clone()));
+    let repository_repo = Arc::new(SqliteRepositoryRepository::new(db.clone()));
+    let chat_repo = Arc::new(SqliteChatRepository::new(db.clone()));
+    let notes = Arc::new(NotesUseCases::new(
+        workspace_repo.clone(),
+        repository_repo.clone(),
+        h._tmp.path().join("clones"),
+    ));
+    let backup = BackupUseCases::new(
+        workspace_repo.clone(),
+        repository_repo.clone(),
+        chat_repo.clone(),
+        notes.clone(),
+    );
+
+    // Give the workspace instructions, a note and a chat.
+    h.workspaces
+        .set_instructions(&h.workspace_id, "Always answer in Japanese.")
+        .unwrap();
+    notes.save(&h.workspace_id, "Runbook", "# Runbook\n\nRestart the queue.").unwrap();
+    let session = h.chats.create_session(&h.workspace_id, "onboarding").unwrap();
+    use codebase_notebook_lib::domain::entities::chat::{Message, Role};
+    chat_repo
+        .append_message(&Message {
+            id: uuid::Uuid::new_v4().to_string(),
+            session_id: session.id.clone(),
+            role: Role::User,
+            content: "how do I start?".into(),
+            citations: Vec::new(),
+            provider: None,
+            model: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        })
+        .unwrap();
+
+    let export = backup.export(&h.workspace_id).unwrap();
+    assert_eq!(export.instructions, "Always answer in Japanese.");
+    assert_eq!(export.notes.len(), 1);
+    assert_eq!(export.chats.len(), 1);
+    // The derived index is deliberately not exported.
+    assert!(!export.repositories.is_empty());
+
+    // Survives a JSON round-trip (that's how it's written to disk).
+    let json = serde_json::to_string(&export).unwrap();
+    let parsed = serde_json::from_str(&json).unwrap();
+
+    let new_id = backup.import(parsed).unwrap();
+    assert_ne!(new_id, h.workspace_id);
+    let imported = workspace_repo.find_by_id(&new_id).unwrap();
+    assert!(imported.name.contains("(imported)"));
+    assert_eq!(imported.instructions, "Always answer in Japanese.");
+    // Imported workspaces never inherit external-send permission.
+    assert!(!imported.allow_external);
+
+    assert!(notes
+        .read(&new_id, "Runbook.md")
+        .unwrap()
+        .contains("Restart the queue"));
+    let chats = h.chats.list_sessions(&new_id).unwrap();
+    assert_eq!(chats.len(), 1);
+    assert_eq!(h.chats.list_messages(&chats[0].id).unwrap()[0].content, "how do I start?");
+}
+
+#[tokio::test]
 async fn at_mentions_pin_a_file_into_the_context() {
     let h = setup().await;
     h.index.execute(&h.workspace_id).await.unwrap();

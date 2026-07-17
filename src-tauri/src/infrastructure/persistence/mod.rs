@@ -219,6 +219,10 @@ const MIGRATIONS: &[&str] = &[
 
             ALTER TABLE provider_configs ADD COLUMN monthly_budget_usd REAL;
             "#,
+    // v6: per-workspace custom instructions appended to the system prompt.
+    r#"
+            ALTER TABLE workspaces ADD COLUMN instructions TEXT NOT NULL DEFAULT '';
+            "#,
 ];
 
 pub(crate) fn storage_err<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> DomainError + '_ {
