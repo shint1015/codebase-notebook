@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-17
+
 ### Added
 
 - Auto-update: the app checks GitHub Releases on startup and offers a
