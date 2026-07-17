@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import "./App.css";
 import type { ChatSession } from "./domain/types";
 import { api } from "./infrastructure/api";
@@ -20,6 +21,7 @@ type View =
   | { kind: "source"; relPath: string; line: number; from: ChatSession | null };
 
 function App() {
+  const { t } = useTranslation();
   const ws = useWorkspaces();
   const providers = useProviders();
   const sessions = useSessions(ws.selectedId);
@@ -77,7 +79,7 @@ function App() {
 
       {!ws.selected ? (
         <main className="chat-empty">
-          <p>Create or select a workspace to start.</p>
+          <p>{t("app.selectWorkspace")}</p>
         </main>
       ) : view.kind === "home" ? (
         <WorkspaceHome

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { LANGUAGES, setLanguage, type Language } from "../../infrastructure/i18n";
 import type { ProviderConfig, ProviderKind } from "../../domain/types";
 import { EXTERNAL_PROVIDERS, PROVIDER_LABELS } from "../../domain/types";
 import { isCommandError } from "../../domain/types";
@@ -15,18 +17,36 @@ interface Props {
 }
 
 export function SettingsView({ providers, onConfigure, onTest, onClose }: Props) {
+  const { t, i18n } = useTranslation();
   return (
     <div className="modal-backdrop">
       <div className="modal settings">
         <div className="settings-header">
-          <h2>AI Providers</h2>
+          <h2>{t("settings.title")}</h2>
           <button onClick={onClose}>✕</button>
         </div>
-        <p className="settings-note">
-          Local (Ollama) is the default and needs no key. External providers are
-          BYOK — keys are stored in the OS keychain, never in the database, and
-          every external request shows you what would be sent first.
-        </p>
+        <p className="settings-note">{t("settings.note")}</p>
+
+        <div className="provider-card">
+          <div className="provider-title">
+            <strong>{t("settings.language")}</strong>
+          </div>
+          <div className="provider-grid">
+            <label>
+              {t("settings.language")}
+              <select
+                value={i18n.language.startsWith("ja") ? "ja" : "en"}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+              >
+                {Object.entries(LANGUAGES).map(([code, label]) => (
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
         {providers.map((p) => (
           <ProviderCard key={p.kind} config={p} onConfigure={onConfigure} onTest={onTest} />
         ))}
@@ -47,6 +67,7 @@ const CONNECTOR_LABELS: Record<string, string> = {
 };
 
 function ConnectorsCard() {
+  const { t } = useTranslation();
   const [connectors, setConnectors] = useState<
     { name: string; connected: boolean }[]
   >([]);
@@ -71,32 +92,27 @@ function ConnectorsCard() {
   return (
     <div className="provider-card">
       <div className="provider-title">
-        <strong>Connectors</strong>
+        <strong>{t("settings.connectors")}</strong>
         <span className="badge external">agent tools ↗</span>
       </div>
-      <p className="settings-note">
-        Connect external services so the agent can act on them (post to Slack,
-        create Notion/Confluence pages, file Asana/Backlog tasks). Tokens are
-        stored in the OS keychain. Every action still needs your per-message
-        approval in Agent mode.
-      </p>
+      <p className="settings-note">{t("settings.connectorsNote")}</p>
       {connectors.map((c) => (
         <div className="connector-row" key={c.name}>
           <label>
             {CONNECTOR_LABELS[c.name] ?? c.name}
-            {c.connected && <em> (connected)</em>}
+            {c.connected && <em> {t("settings.connected")}</em>}
           </label>
           <div className="connector-input">
             <input
               type="password"
               value={tokens[c.name] ?? ""}
-              placeholder={c.connected ? "•••••• (leave blank to keep)" : "paste token"}
+              placeholder={c.connected ? t("settings.keyKeepPlaceholder") : t("settings.keyPlaceholder")}
               onChange={(e) =>
                 setTokens((prev) => ({ ...prev, [c.name]: e.target.value }))
               }
             />
             <button onClick={() => void save(c.name)}>
-              {c.connected && !(tokens[c.name] ?? "").trim() ? "Disconnect" : "Save"}
+              {c.connected && !(tokens[c.name] ?? "").trim() ? t("settings.disconnect") : t("settings.save")}
             </button>
           </div>
         </div>
@@ -107,6 +123,7 @@ function ConnectorsCard() {
 }
 
 function UsageCard() {
+  const { t } = useTranslation();
   const [summary, setSummary] = useState<
     import("../../domain/types").ProviderUsageSummary[]
   >([]);
@@ -122,7 +139,7 @@ function UsageCard() {
   return (
     <div className="provider-card">
       <div className="provider-title">
-        <strong>Usage & audit</strong>
+        <strong>{t("settings.usage")}</strong>
       </div>
       {summary.length > 0 && (
         <div className="usage-summary">
@@ -131,7 +148,7 @@ function UsageCard() {
               {s.provider}: ${s.month_total_usd.toFixed(2)}
               {s.monthly_budget_usd !== null &&
                 ` / $${s.monthly_budget_usd.toFixed(0)}`}{" "}
-              this month
+              {t("settings.thisMonth")}
             </span>
           ))}
         </div>
@@ -146,24 +163,22 @@ function UsageCard() {
               {r.provider} · {r.model}
             </span>
             <span title={r.sources.join("\n")}>
-              {r.sources.length} sources
+              {t("settings.sources", { count: r.sources.length })}
             </span>
             <span>${r.est_cost_usd.toFixed(4)}</span>
           </li>
         ))}
         {records.length === 0 && (
-          <li className="empty">No model calls recorded yet.</li>
+          <li className="empty">{t("settings.noUsage")}</li>
         )}
       </ul>
-      <p className="settings-note">
-        Every model call is logged locally with the exact source files that
-        were included in the prompt. Costs are rough estimates.
-      </p>
+      <p className="settings-note">{t("settings.usageNote")}</p>
     </div>
   );
 }
 
 function SearchSettingsCard() {
+  const { t } = useTranslation();
   const [embeddingModel, setEmbeddingModel] = useState("");
   const [rerankEnabled, setRerankEnabled] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -179,7 +194,7 @@ function SearchSettingsCard() {
     setStatus(null);
     try {
       await api.setSearchSettings(embeddingModel, rerankEnabled);
-      setStatus("Saved. Re-index workspaces after changing the embedding model.");
+      setStatus(t("settings.searchSaved"));
     } catch (e) {
       setStatus(isCommandError(e) ? e.message : String(e));
     }
@@ -188,12 +203,12 @@ function SearchSettingsCard() {
   return (
     <div className="provider-card">
       <div className="provider-title">
-        <strong>Search</strong>
-        <span className="badge local">local</span>
+        <strong>{t("settings.search")}</strong>
+        <span className="badge local">{t("settings.local")}</span>
       </div>
       <div className="provider-grid">
         <label>
-          Embedding model (Ollama)
+          {t("settings.embeddingModel")}
           <input
             value={embeddingModel}
             onChange={(e) => setEmbeddingModel(e.target.value)}
@@ -206,7 +221,7 @@ function SearchSettingsCard() {
             checked={rerankEnabled}
             onChange={(e) => setRerankEnabled(e.target.checked)}
           />
-          Rerank results with the local LLM (slower, higher quality)
+          {t("settings.rerank")}
         </label>
       </div>
       <div className="provider-actions">
@@ -239,6 +254,7 @@ function ProviderCard({
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const { t } = useTranslation();
   const isExternal = EXTERNAL_PROVIDERS.includes(config.kind);
 
   const save = async () => {
@@ -261,7 +277,7 @@ function ProviderCard({
         apiKey.trim() ? apiKey.trim() : null,
       );
       setApiKey("");
-      setStatus("Saved.");
+      setStatus(t("settings.saved"));
     } catch (e) {
       setStatus(isCommandError(e) ? e.message : String(e));
     } finally {
@@ -270,7 +286,7 @@ function ProviderCard({
   };
 
   const test = async () => {
-    setStatus("Testing…");
+    setStatus(t("settings.testing"));
     try {
       setStatus(await onTest(config.kind));
     } catch (e) {
@@ -290,44 +306,44 @@ function ProviderCard({
           <strong>{PROVIDER_LABELS[config.kind]}</strong>
         </label>
         {isExternal ? (
-          <span className="badge external">external ↗</span>
+          <span className="badge external">{t("settings.external")}</span>
         ) : (
-          <span className="badge local">local</span>
+          <span className="badge local">{t("settings.local")}</span>
         )}
       </div>
       <div className="provider-grid">
         <label>
-          Base URL
+          {t("settings.baseUrl")}
           <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         </label>
         <label>
-          Default model
+          {t("settings.defaultModel")}
           <input
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="e.g. qwen2.5-coder:14b"
+            placeholder="qwen2.5-coder:14b"
           />
         </label>
         {isExternal && (
           <>
             <label>
-              API key {config.has_api_key && <em>(stored in keychain)</em>}
+              {t("settings.apiKey")} {config.has_api_key && <em>{t("settings.storedInKeychain")}</em>}
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={config.has_api_key ? "•••••• (leave blank to keep)" : "paste key"}
+                placeholder={config.has_api_key ? t("settings.keyKeepPlaceholder") : t("settings.keyPlaceholder")}
               />
             </label>
             <label>
-              Monthly budget (USD)
+              {t("settings.monthlyBudget")}
               <input
                 type="number"
                 min="0"
                 step="1"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
-                placeholder="no limit"
+                placeholder={t("settings.noLimit")}
               />
             </label>
             <label className="checkbox-row">
@@ -336,16 +352,16 @@ function ProviderCard({
                 checked={allowSendCode}
                 onChange={(e) => setAllowSendCode(e.target.checked)}
               />
-              Allow sending code snippets to this provider
+              {t("settings.allowSendCode")}
             </label>
           </>
         )}
       </div>
       <div className="provider-actions">
         <button className="primary" onClick={() => void save()} disabled={saving}>
-          Save
+          {t("settings.save")}
         </button>
-        <button onClick={() => void test()}>Test connection</button>
+        <button onClick={() => void test()}>{t("settings.testConnection")}</button>
         {status && <span className="provider-status">{status}</span>}
       </div>
     </div>

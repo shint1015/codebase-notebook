@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { OllamaStatus } from "../../domain/types";
 import { api } from "../../infrastructure/api";
 
@@ -11,6 +12,7 @@ export function OllamaBanner() {
   const [progress, setProgress] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const refresh = useCallback(async () => {
     try {
@@ -47,19 +49,16 @@ export function OllamaBanner() {
     <div className="ollama-banner">
       {!status.reachable ? (
         <>
-          <strong>Ollama is not running.</strong>{" "}
-          <span>
-            Install it (<code>brew install ollama</code>) and start it with{" "}
-            <code>ollama serve</code> — the local model powers offline answers.
-          </span>
+          <strong>{t("ollama.notRunning")}</strong>{" "}
+          <span>{t("ollama.installHint")}</span>
         </>
       ) : (
         <>
-          <strong>Local models missing.</strong>
+          <strong>{t("ollama.modelsMissing")}</strong>
           <div className="ollama-actions">
             {!status.chat_model_present && (
               <button disabled={pulling} onClick={() => void pull(status.chat_model)}>
-                ⬇ Pull {status.chat_model} (chat)
+                {t("ollama.pullChat", { model: status.chat_model })}
               </button>
             )}
             {!status.embedding_model_present && (
@@ -67,7 +66,7 @@ export function OllamaBanner() {
                 disabled={pulling}
                 onClick={() => void pull(status.embedding_model)}
               >
-                ⬇ Pull {status.embedding_model} (embeddings)
+                {t("ollama.pullEmbedding", { model: status.embedding_model })}
               </button>
             )}
           </div>

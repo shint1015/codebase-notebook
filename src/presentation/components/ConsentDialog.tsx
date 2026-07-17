@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { PendingConsent } from "../../application/useChat";
 import { PROVIDER_LABELS } from "../../domain/types";
 
@@ -15,28 +16,27 @@ interface Props {
  */
 export function ConsentDialog({ pending, onApprove, onLocalOnly, onCancel }: Props) {
   const { preparation, provider } = pending;
+  const { t } = useTranslation();
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h2>Send sources to {PROVIDER_LABELS[provider]}?</h2>
-        <p>
-          This question would send the following parts of your workspace to an
-          <strong> external AI API</strong> ({preparation.model}):
-        </p>
+        <h2>{t("consent.title", { provider: PROVIDER_LABELS[provider] })}</h2>
+        <p>{t("consent.body", { model: preparation.model })}</p>
         <ul className="source-list">
-          {preparation.sources.length === 0 && <li>(no source chunks — question text only)</li>}
+          {preparation.sources.length === 0 && <li>{t("consent.noSources")}</li>}
           {preparation.sources.map((s, i) => (
             <li key={i}>
-              <code>{s.rel_path}</code> lines {s.start_line}–{s.end_line}
+              <code>{s.rel_path}</code>{" "}
+              {t("citation.lines", { from: s.start_line, to: s.end_line })}
             </li>
           ))}
         </ul>
         <div className="modal-actions">
           <button className="primary" onClick={onApprove}>
-            Allow this time
+            {t("consent.allowOnce")}
           </button>
-          <button onClick={onLocalOnly}>Use local model instead</button>
-          <button onClick={onCancel}>Cancel</button>
+          <button onClick={onLocalOnly}>{t("consent.useLocal")}</button>
+          <button onClick={onCancel}>{t("consent.cancel")}</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
@@ -12,6 +13,7 @@ export function UpdateBanner() {
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     check()
@@ -31,18 +33,18 @@ export function UpdateBanner() {
       await update.downloadAndInstall((event) => {
         switch (event.event) {
           case "Started":
-            setProgress("Downloading…");
+            setProgress(t("update.downloading"));
             break;
           case "Progress":
             downloaded += event.data.chunkLength;
-            setProgress(`Downloading… ${(downloaded / 1_000_000).toFixed(1)} MB`);
+            setProgress(t("update.downloadingSize", { size: (downloaded / 1_000_000).toFixed(1) }));
             break;
           case "Finished":
-            setProgress("Installing…");
+            setProgress(t("update.installing"));
             break;
         }
       });
-      setProgress("Restarting…");
+      setProgress(t("update.restarting"));
       await relaunch();
     } catch (e) {
       setError(String(e));
@@ -53,7 +55,7 @@ export function UpdateBanner() {
   return (
     <div className="update-banner">
       <span>
-        <strong>Update available — v{update.version}</strong>
+        <strong>{t("update.available", { version: update.version })}</strong>
         {update.body ? ` · ${update.body.split("\n")[0]}` : ""}
       </span>
       <span className="update-actions">
@@ -62,9 +64,9 @@ export function UpdateBanner() {
         ) : (
           <>
             <button className="primary" onClick={() => void install()}>
-              Update &amp; restart
+              {t("update.install")}
             </button>
-            <button onClick={() => setDismissed(true)}>Later</button>
+            <button onClick={() => setDismissed(true)}>{t("update.later")}</button>
           </>
         )}
       </span>
