@@ -79,6 +79,10 @@ export const api = {
     invoke<string>("chat_to_document", { workspaceId, sessionId, title }),
   revealSource: (workspaceId: string, relPath: string, line: number) =>
     invoke<void>("reveal_source", { workspaceId, relPath, line }),
+  readSourceFile: (workspaceId: string, relPath: string) =>
+    invoke<string>("read_source_file", { workspaceId, relPath }),
+  writeSourceFile: (workspaceId: string, relPath: string, content: string) =>
+    invoke<void>("write_source_file", { workspaceId, relPath, content }),
 
   prepareAsk: (
     workspaceId: string,

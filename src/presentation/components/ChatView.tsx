@@ -19,6 +19,7 @@ interface Props {
   onSessionCreated: (session: ChatSession) => void;
   onForked: (session: ChatSession) => void;
   onDocumentized: () => void;
+  onOpenSource: (relPath: string, line: number) => void;
   onBack: () => void;
 }
 
@@ -29,6 +30,7 @@ export function ChatView({
   onSessionCreated,
   onForked,
   onDocumentized,
+  onOpenSource,
   onBack,
 }: Props) {
   const chat = useChat(workspace.id, session?.id ?? null, onSessionCreated);
@@ -162,6 +164,7 @@ export function ChatView({
               message={m}
               workspaceId={workspace.id}
               onFork={(messageId) => void fork(messageId)}
+              onOpenSource={onOpenSource}
             />
           </div>
         ))}

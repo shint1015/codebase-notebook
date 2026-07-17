@@ -8,11 +8,14 @@ export function MessageBubble({
   message,
   workspaceId,
   onFork,
+  onOpenSource,
 }: {
   message: Message;
   workspaceId: string;
   /** Fork the conversation up to and including this message. */
   onFork: (messageId: string) => void;
+  /** Open a cited file in the in-app code editor. */
+  onOpenSource: (relPath: string, line: number) => void;
 }) {
   const [openCitation, setOpenCitation] = useState<number | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
@@ -73,18 +76,27 @@ export function MessageBubble({
                     <span>
                       {c.rel_path} (lines {c.start_line}–{c.end_line})
                     </span>
-                    <button
-                      className="citation-open"
-                      title="Open in editor"
-                      onClick={() => {
-                        setRevealError(null);
-                        api
-                          .revealSource(workspaceId, c.rel_path, c.start_line)
-                          .catch((e) => setRevealError(String(e)));
-                      }}
-                    >
-                      Open ↗
-                    </button>
+                    <span className="citation-open-group">
+                      <button
+                        className="citation-open"
+                        title="Open in the in-app code editor"
+                        onClick={() => onOpenSource(c.rel_path, c.start_line)}
+                      >
+                        Open
+                      </button>
+                      <button
+                        className="citation-open"
+                        title="Open in your external editor"
+                        onClick={() => {
+                          setRevealError(null);
+                          api
+                            .revealSource(workspaceId, c.rel_path, c.start_line)
+                            .catch((e) => setRevealError(String(e)));
+                        }}
+                      >
+                        ↗
+                      </button>
+                    </span>
                   </div>
                   {c.snippet}
                 </pre>

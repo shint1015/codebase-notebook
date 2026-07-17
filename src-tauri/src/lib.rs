@@ -92,6 +92,8 @@ pub fn run() {
             commands::agent_ask,
             commands::list_connectors,
             commands::set_connector_token,
+            commands::read_source_file,
+            commands::write_source_file,
             commands::list_notes,
             commands::read_note,
             commands::save_note,

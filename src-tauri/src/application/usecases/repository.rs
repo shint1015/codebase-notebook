@@ -236,15 +236,43 @@ impl RepositoryUseCases {
                 return Ok(repository.root_path.clone());
             }
             if let Some(rest) = rel_path.strip_prefix(&format!("{}/", repository.name)) {
-                return Ok(std::path::Path::new(&repository.root_path)
-                    .join(rest)
-                    .to_string_lossy()
-                    .to_string());
+                let joined = std::path::Path::new(&repository.root_path).join(rest);
+                // A citation path must never escape its repository (e.g.
+                // "repo/../../etc/passwd"), so resolve and re-check the root.
+                return contained_path(&repository.root_path, &joined);
             }
         }
         Err(DomainError::NotFound(format!(
             "no source matches {rel_path}"
         )))
+    }
+
+    /// Read a source file for the in-app code editor.
+    pub fn read_source_file(&self, workspace_id: &str, rel_path: &str) -> DomainResult<String> {
+        let path = self.resolve_source_path(workspace_id, rel_path)?;
+        if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(u64::MAX) > MAX_EDITABLE_BYTES {
+            return Err(DomainError::Validation(
+                "file is too large to open in the editor".into(),
+            ));
+        }
+        std::fs::read_to_string(&path)
+            .map_err(|e| DomainError::NotFound(format!("cannot read {rel_path}: {e}")))
+    }
+
+    /// Write a source file edited in the app. Only paths inside a registered
+    /// repository of this workspace are writable (see `resolve_source_path`).
+    pub fn write_source_file(
+        &self,
+        workspace_id: &str,
+        rel_path: &str,
+        content: &str,
+    ) -> DomainResult<()> {
+        let path = self.resolve_source_path(workspace_id, rel_path)?;
+        if !std::path::Path::new(&path).is_file() {
+            return Err(DomainError::NotFound(format!("no such file: {rel_path}")));
+        }
+        std::fs::write(&path, content)
+            .map_err(|e| DomainError::Indexing(format!("write {rel_path}: {e}")))
     }
 
     /// Remove all app-managed clones of a workspace (used on workspace delete).
@@ -277,6 +305,28 @@ impl RepositoryUseCases {
         self.repositories.create(&repository)?;
         Ok(repository)
     }
+}
+
+/// Largest file the in-app editor will open.
+const MAX_EDITABLE_BYTES: u64 = 2_000_000;
+
+/// Resolve `candidate` and confirm it stays inside `root`. Guards every file
+/// read/write reachable from a citation path against traversal ("../..").
+fn contained_path(root: &str, candidate: &std::path::Path) -> DomainResult<String> {
+    let root = std::path::Path::new(root)
+        .canonicalize()
+        .map_err(|e| DomainError::NotFound(format!("source root unavailable: {e}")))?;
+    // The file must exist to canonicalize; that's fine — we only read/reveal
+    // existing files.
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|e| DomainError::NotFound(format!("no such file: {e}")))?;
+    if !resolved.starts_with(&root) {
+        return Err(DomainError::Validation(
+            "path escapes its repository".into(),
+        ));
+    }
+    Ok(resolved.to_string_lossy().to_string())
 }
 
 /// "owner/repo", "https://github.com/owner/repo(.git|/issues|/wiki)" -> "owner/repo"

@@ -9,12 +9,14 @@ import { WorkspaceSidebar } from "./presentation/components/WorkspaceSidebar";
 import { WorkspaceHome } from "./presentation/components/WorkspaceHome";
 import { ChatView } from "./presentation/components/ChatView";
 import { DocumentEditor } from "./presentation/components/DocumentEditor";
+import { SourceEditor } from "./presentation/components/SourceEditor";
 import { SettingsView } from "./presentation/components/SettingsView";
 
 type View =
   | { kind: "home" }
   | { kind: "chat"; session: ChatSession | null }
-  | { kind: "doc"; name: string | null };
+  | { kind: "doc"; name: string | null }
+  | { kind: "source"; relPath: string; line: number; from: ChatSession | null };
 
 function App() {
   const ws = useWorkspaces();
@@ -82,6 +84,19 @@ function App() {
           onNewDocument={() => setView({ kind: "doc", name: null })}
           onOpenDocument={(name) => setView({ kind: "doc", name })}
         />
+      ) : view.kind === "source" ? (
+        <SourceEditor
+          workspace={ws.selected}
+          relPath={view.relPath}
+          line={view.line}
+          onClose={() =>
+            setView(
+              view.from
+                ? { kind: "chat", session: view.from }
+                : { kind: "home" },
+            )
+          }
+        />
       ) : view.kind === "doc" ? (
         <DocumentEditor
           workspace={ws.selected}
@@ -103,6 +118,14 @@ function App() {
             setView({ kind: "chat", session });
           }}
           onDocumentized={() => void api.indexWorkspace(ws.selected!.id)}
+          onOpenSource={(relPath, line) =>
+            setView((v) => ({
+              kind: "source",
+              relPath,
+              line,
+              from: v.kind === "chat" ? v.session : null,
+            }))
+          }
           onBack={() => setView({ kind: "home" })}
         />
       )}

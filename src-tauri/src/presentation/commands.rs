@@ -466,6 +466,29 @@ pub async fn pull_ollama_model(
     Ok(admin.pull(&model, &sink).await?)
 }
 
+// ---- source files (in-app code editor) ----
+
+#[tauri::command]
+pub fn read_source_file(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    rel_path: String,
+) -> CommandResult<String> {
+    Ok(state.repositories.read_source_file(&workspace_id, &rel_path)?)
+}
+
+#[tauri::command]
+pub fn write_source_file(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    rel_path: String,
+    content: String,
+) -> CommandResult<()> {
+    Ok(state
+        .repositories
+        .write_source_file(&workspace_id, &rel_path, &content)?)
+}
+
 // ---- notes / in-app documents ----
 
 #[tauri::command]
