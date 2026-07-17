@@ -146,6 +146,15 @@ export interface SourcePreview {
   end_line: number;
 }
 
+export interface ChatSearchHit {
+  session_id: string;
+  session_title: string;
+  message_id: string;
+  role: string;
+  excerpt: string;
+  created_at: string;
+}
+
 export interface ToolEvent {
   name: string;
   summary: string;

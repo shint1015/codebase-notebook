@@ -290,6 +290,44 @@ impl DocumentRepository for SqliteDocumentRepository {
             .map_err(storage_err("read embeddings"))
     }
 
+    fn hits_by_rel_path(
+        &self,
+        workspace_id: &str,
+        rel_path: &str,
+        limit: usize,
+    ) -> DomainResult<Vec<SearchHit>> {
+        let conn = self.db.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT c.id, c.document_id, c.workspace_id, c.seq, c.content,
+                        c.start_line, c.end_line, d.rel_path, 1.0 AS score
+                 FROM chunks c JOIN documents d ON d.id = c.document_id
+                 WHERE d.workspace_id = ?1 AND d.rel_path = ?2
+                 ORDER BY c.seq
+                 LIMIT ?3",
+            )
+            .map_err(storage_err("prepare hits by path"))?;
+        let rows = stmt
+            .query_map(params![workspace_id, rel_path, limit as i64], row_to_hit)
+            .map_err(storage_err("hits by path"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(storage_err("read hits by path"))
+    }
+
+    fn list_rel_paths(&self, workspace_id: &str) -> DomainResult<Vec<String>> {
+        let conn = self.db.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT rel_path FROM documents WHERE workspace_id = ?1 ORDER BY rel_path",
+            )
+            .map_err(storage_err("prepare list paths"))?;
+        let rows = stmt
+            .query_map(params![workspace_id], |row| row.get(0))
+            .map_err(storage_err("list paths"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(storage_err("read paths"))
+    }
+
     fn hits_by_chunk_ids(&self, chunk_ids: &[String]) -> DomainResult<Vec<SearchHit>> {
         if chunk_ids.is_empty() {
             return Ok(Vec::new());
