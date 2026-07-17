@@ -29,6 +29,36 @@ body {
   overflow: hidden;
 }
 
+/* ---------- update banner ---------- */
+
+/* Spans the window above everything else so an update is never missed. */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--accent-dim);
+  color: #fff;
+  font-size: 12px;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-progress {
+  font-family: ui-monospace, monospace;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {
@@ -350,6 +380,11 @@ body {
 .citation-open {
   font-size: 10px;
   padding: 1px 8px;
+}
+
+.citation-open-group {
+  display: inline-flex;
+  gap: 4px;
 }
 
 .workspace-list li.empty {
@@ -838,22 +873,23 @@ textarea:focus {
   border-right: none;
 }
 
-.doc-textarea {
-  width: 100%;
+/* CodeMirror fills its pane; its own theme handles colours. */
+.code-editor {
   height: 100%;
-  border: none;
-  border-radius: 0;
-  resize: none;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-monospace, monospace;
   font-size: 13px;
-  line-height: 1.6;
-  padding: 16px 20px;
 }
 
-.doc-textarea:focus {
+.code-editor .cm-editor {
+  height: 100%;
+}
+
+.code-editor .cm-editor.cm-focused {
   outline: none;
+}
+
+.code-editor .cm-scroller {
+  font-family: ui-monospace, monospace;
+  line-height: 1.6;
 }
 
 .doc-preview {

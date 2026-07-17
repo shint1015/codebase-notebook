@@ -16,7 +16,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Auto-update (desktop only): the frontend asks for the check, so
+            // the user always sees what's happening.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let data_dir = app.path().app_data_dir().expect("app data dir");
             let db_path = data_dir.join("codebase-notebook.sqlite");
             let clones_dir = data_dir.join("repos");
@@ -92,6 +99,8 @@ pub fn run() {
             commands::agent_ask,
             commands::list_connectors,
             commands::set_connector_token,
+            commands::read_source_file,
+            commands::write_source_file,
             commands::list_notes,
             commands::read_note,
             commands::save_note,

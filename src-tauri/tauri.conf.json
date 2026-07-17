@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Codebase Notebook",
   "mainBinaryName": "codebase-notebook",
-  "version": "0.12.0",
+  "version": "0.13.0-dev.0",
   "identifier": "com.spcsft.codebase-notebook",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -31,6 +31,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwQTU4NTQ3OTJBODJERkYKUldUL0xhaVNSNFdsUUc0eThNeVJwaTh3UUdyMjl5aDA0TUJVdEx2WDFpSjRGVVZ1b2ZqTkg5b2YK",
+      "endpoints": [
+        "https://github.com/shint1015/codebase-notebook/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
