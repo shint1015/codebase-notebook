@@ -31,8 +31,10 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@uiw/react-codemirror": "^4.25.11",
+    "i18next": "^26.3.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.10",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },

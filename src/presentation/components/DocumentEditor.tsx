@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Workspace } from "../../domain/types";
@@ -26,6 +27,7 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
   const [status, setStatus] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(!!noteName);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!noteName) return;
@@ -43,14 +45,14 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
   const save = async () => {
     const name = title.trim();
     if (!name) {
-      setStatus("Give the document a title first.");
+      setStatus(t("editor.needTitle"));
       return;
     }
-    setStatus("Saving…");
+    setStatus(t("editor.saving"));
     try {
       await api.saveNote(workspace.id, name, content);
       setDirty(false);
-      setStatus("Saved · indexing…");
+      setStatus(t("editor.savedIndexing"));
       onSaved();
     } catch (e) {
       setStatus(isCommandError(e) ? e.message : String(e));
@@ -78,13 +80,13 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
     <main className="doc-editor">
       <header className="chat-header">
         <div className="chat-title">
-          <button onClick={onClose} title="Back to workspace">
+          <button onClick={onClose} title={t("chat.back")}>
             ←
           </button>
           <input
             className="doc-title-input"
             value={title}
-            placeholder="Document title"
+            placeholder={t("editor.title")}
             onChange={(e) => {
               setTitle(e.target.value);
               setDirty(true);
@@ -100,12 +102,12 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
                 className={mode === m ? "active" : ""}
                 onClick={() => setMode(m)}
               >
-                {m === "split" ? "◫ Split" : m === "edit" ? "✎ Edit" : "▤ Preview"}
+                {m === "split" ? t("editor.split") : m === "edit" ? t("editor.edit") : t("editor.preview")}
               </button>
             ))}
           </div>
           <button className="primary" onClick={() => void save()}>
-            Save
+            {t("editor.save")}
           </button>
         </div>
       </header>
@@ -113,7 +115,7 @@ export function DocumentEditor({ workspace, noteName, onClose, onSaved }: Props)
       {status && <div className="doc-status">{status}</div>}
 
       {loading ? (
-        <div className="doc-loading">Loading…</div>
+        <div className="doc-loading">{t("editor.loading")}</div>
       ) : (
         <div className={`doc-body ${mode}`}>
           {mode !== "preview" && <div className="doc-pane">{editor}</div>}

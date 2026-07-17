@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "../../domain/types";
 import { api } from "../../infrastructure/api";
@@ -27,6 +28,7 @@ export function WorkspaceHome({
   const [gitUrl, setGitUrl] = useState("");
   const [issuesSpec, setIssuesSpec] = useState("");
   const [notes, setNotes] = useState<{ name: string; updated_at: string }[]>([]);
+  const { t } = useTranslation();
 
   useEffect(() => {
     void api.listNotes(workspace.id).then(setNotes);
@@ -69,16 +71,12 @@ export function WorkspaceHome({
         <button
           className="danger"
           onClick={() => {
-            if (
-              confirm(
-                `Delete workspace "${workspace.name}"? Local folders stay on disk; app-managed clones are removed.`,
-              )
-            ) {
+            if (confirm(t("home.deleteWorkspaceConfirm", { name: workspace.name }))) {
               void onDeleteWorkspace(workspace.id);
             }
           }}
         >
-          Delete workspace
+          {t("home.deleteWorkspace")}
         </button>
       </header>
 
@@ -86,30 +84,30 @@ export function WorkspaceHome({
 
       <section className="home-section">
         <div className="home-section-header">
-          <h3>Sources</h3>
+          <h3>{t("home.sources")}</h3>
           <div className="repo-add">
-            <button onClick={() => void addLocalFolder()}>+ Folder</button>
-            <button onClick={() => void addLocalFile()}>+ File</button>
+            <button onClick={() => void addLocalFolder()}>{t("home.addFolder")}</button>
+            <button onClick={() => void addLocalFile()}>{t("home.addFile")}</button>
           </div>
         </div>
 
         <div className="repo-add remote-row">
           <input
             value={gitUrl}
-            placeholder="git URL — repo or wiki (…/repo.wiki.git)"
+            placeholder={t("home.gitPlaceholder")}
             onChange={(e) => setGitUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void addFromGit();
             }}
           />
           <button onClick={() => void addFromGit()} disabled={repos.cloning || !gitUrl.trim()}>
-            {repos.cloning ? "Working…" : "Clone"}
+            {repos.cloning ? t("home.working") : t("home.clone")}
           </button>
         </div>
         <div className="repo-add remote-row">
           <input
             value={issuesSpec}
-            placeholder="GitHub issues — owner/repo"
+            placeholder={t("home.issuesPlaceholder")}
             onChange={(e) => setIssuesSpec(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void addIssues();
@@ -119,7 +117,7 @@ export function WorkspaceHome({
             onClick={() => void addIssues()}
             disabled={repos.cloning || !issuesSpec.trim()}
           >
-            {repos.cloning ? "Working…" : "Fetch issues"}
+            {repos.cloning ? t("home.working") : t("home.fetchIssues")}
           </button>
         </div>
 
@@ -136,31 +134,28 @@ export function WorkspaceHome({
               <div className="repo-actions">
                 {repo.source_kind !== "local" && (
                   <button
-                    title="Pull latest from remote and re-index"
+                    title={t("home.syncTitle")}
                     disabled={repos.cloning || repos.indexing}
                     onClick={() => void repos.sync(repo.id)}
                   >
-                    ⟳ Sync
+                    {t("home.sync")}
                   </button>
                 )}
                 <button
                   className="danger"
                   onClick={() => {
-                    if (confirm(`Remove repository "${repo.name}" from this workspace?`)) {
+                    if (confirm(t("home.removeRepoConfirm", { name: repo.name }))) {
                       void repos.remove(repo.id);
                     }
                   }}
                 >
-                  Remove
+                  {t("home.remove")}
                 </button>
               </div>
             </li>
           ))}
           {repos.repositories.length === 0 && (
-            <li className="empty">
-              Add a local folder/file, clone a git repository or wiki, or fetch
-              GitHub issues to start.
-            </li>
+            <li className="empty">{t("home.noSources")}</li>
           )}
         </ul>
 
@@ -170,18 +165,22 @@ export function WorkspaceHome({
             onClick={() => void repos.index()}
             disabled={repos.indexing || repos.repositories.length === 0}
           >
-            {repos.indexing ? "Indexing…" : "Index all repositories"}
+            {repos.indexing ? t("home.indexing") : t("home.indexAll")}
           </button>
           {repos.lastReport && (
             <span className="index-summary">
-              {repos.lastReport.files_indexed} files indexed (
-              {repos.lastReport.files_unchanged} unchanged),{" "}
-              {repos.lastReport.chunks_created} chunks
+              {t("home.indexSummary", {
+                files: repos.lastReport.files_indexed,
+                unchanged: repos.lastReport.files_unchanged,
+                chunks: repos.lastReport.chunks_created,
+              })}
               {repos.lastReport.files_with_secrets_redacted > 0 &&
-                ` · 🔒 secrets redacted in ${repos.lastReport.files_with_secrets_redacted} file(s)`}
+                t("home.secretsRedacted", {
+                  count: repos.lastReport.files_with_secrets_redacted,
+                })}
               {repos.lastReport.embedding_available
-                ? ` · ${repos.lastReport.embeddings_created} embeddings`
-                : " · keyword search only"}
+                ? t("home.embeddings", { count: repos.lastReport.embeddings_created })
+                : t("home.keywordOnly")}
             </span>
           )}
         </div>
@@ -190,9 +189,9 @@ export function WorkspaceHome({
 
       <section className="home-section">
         <div className="home-section-header">
-          <h3>Documents</h3>
+          <h3>{t("home.documents")}</h3>
           <button className="primary" onClick={onNewDocument}>
-            + New document
+            {t("home.newDocument")}
           </button>
         </div>
         <ul className="session-list">
@@ -205,9 +204,7 @@ export function WorkspaceHome({
             </li>
           ))}
           {notes.length === 0 && (
-            <li className="empty">
-              Write markdown notes here — they're indexed and citable like any source.
-            </li>
+            <li className="empty">{t("home.noDocuments")}</li>
           )}
         </ul>
       </section>
@@ -218,7 +215,7 @@ export function WorkspaceHome({
       />
 
       <p className="home-hint">
-        Chats live in the sidebar — pick one or start a "+ New chat".
+        {t("home.chatsHint")}
       </p>
     </main>
   );
