@@ -62,7 +62,7 @@ for macOS (Apple Silicon / Intel), Windows, or Linux.
 On macOS you can also install with [Homebrew](https://brew.sh):
 
 ```bash
-brew tap shint1015/tap && brew install --cask --no-quarantine codebase-notebook
+brew install --cask shint1015/tap/codebase-notebook
 ```
 
 The builds are **unsigned** (signing certificates cost money; this project is
