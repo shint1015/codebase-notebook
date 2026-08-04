@@ -174,6 +174,9 @@ mod tests {
         fn list_by_workspace(&self, _w: &str) -> DomainResult<Vec<Repository>> {
             Ok(vec![self.0.clone()])
         }
+        fn set_classification(&self, _id: &str, _c: &str) -> DomainResult<()> {
+            unimplemented!()
+        }
         fn delete(&self, _id: &str) -> DomainResult<()> {
             unimplemented!()
         }
@@ -187,6 +190,7 @@ mod tests {
             root_path: dir.to_string_lossy().to_string(),
             remote_url: Some("https://github.com/acme/app.wiki.git".into()),
             source_kind: SourceKind::Git,
+            classification: crate::domain::entities::repository::Classification::Internal,
             created_at: "2026-01-01T00:00:00Z".into(),
         }
     }
