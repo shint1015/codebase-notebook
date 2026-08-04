@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.19.0] - 2026-08-04
+## [0.18.0] - 2026-08-04
 
 ### Added
 
@@ -16,10 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   synthetic `GIT_HISTORY.md` document. "What changed recently?" and "who
   touched this area?" become answerable with citations, for both local and
   external models. Re-indexing skips the document while HEAD is unchanged.
-
-## [0.18.0] - 2026-08-04
-
-### Added
 
 - Grounding badge on every answer: each assistant message now shows whether
   its claims carry citations — **Grounded**, **Partially grounded** or
