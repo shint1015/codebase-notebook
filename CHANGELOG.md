@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multi-hop retrieval: when retrieved code calls a function that is defined
+  elsewhere, the definition is pulled into the context too (one hop,
+  deterministic — the consent preview always matches what is actually sent).
+  "How does X work?" now also shows the helpers X depends on.
 - Symbol search: queries that name a function or class (`collect_hits`,
   `MessageBubble`) now rank the chunk that *defines* the symbol above chunks
   that merely use it, across Rust, Python, TypeScript/JavaScript and Go
