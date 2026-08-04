@@ -223,6 +223,12 @@ const MIGRATIONS: &[&str] = &[
     r#"
             ALTER TABLE workspaces ADD COLUMN instructions TEXT NOT NULL DEFAULT '';
             "#,
+    // v7: each source has a sensitivity classification governing whether its
+    // content may be sent to external providers. Existing rows default to
+    // 'internal' (external allowed with consent — the prior behaviour).
+    r#"
+            ALTER TABLE repositories ADD COLUMN classification TEXT NOT NULL DEFAULT 'internal';
+            "#,
 ];
 
 pub(crate) fn storage_err<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> DomainError + '_ {

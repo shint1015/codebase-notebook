@@ -17,6 +17,7 @@ impl SqliteRepositoryRepository {
 
 fn row_to_repository(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repository> {
     let kind_str: String = row.get(6)?;
+    let class_str: String = row.get(7)?;
     Ok(Repository {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
@@ -25,6 +26,7 @@ fn row_to_repository(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repository> {
         remote_url: row.get(4)?,
         created_at: row.get(5)?,
         source_kind: crate::domain::entities::repository::SourceKind::parse(&kind_str),
+        classification: crate::domain::entities::repository::Classification::parse(&class_str),
     })
 }
 
@@ -33,8 +35,8 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         self.db
             .lock()
             .execute(
-                "INSERT INTO repositories (id, workspace_id, name, root_path, remote_url, created_at, source_kind)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO repositories (id, workspace_id, name, root_path, remote_url, created_at, source_kind, classification)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     repository.id,
                     repository.workspace_id,
@@ -43,6 +45,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
                     repository.remote_url,
                     repository.created_at,
                     repository.source_kind.as_str(),
+                    repository.classification.as_str(),
                 ],
             )
             .map_err(|e| match e {
@@ -63,7 +66,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         self.db
             .lock()
             .query_row(
-                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind
+                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind, classification
                  FROM repositories WHERE id = ?1",
                 params![id],
                 row_to_repository,
@@ -80,7 +83,7 @@ impl RepositoryRepository for SqliteRepositoryRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind
+                "SELECT id, workspace_id, name, root_path, remote_url, created_at, source_kind, classification
                  FROM repositories WHERE workspace_id = ?1 ORDER BY created_at",
             )
             .map_err(storage_err("prepare list repositories"))?;
@@ -89,6 +92,21 @@ impl RepositoryRepository for SqliteRepositoryRepository {
             .map_err(storage_err("list repositories"))?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(storage_err("read repositories"))
+    }
+
+    fn set_classification(&self, id: &str, classification: &str) -> DomainResult<()> {
+        let changed = self
+            .db
+            .lock()
+            .execute(
+                "UPDATE repositories SET classification = ?2 WHERE id = ?1",
+                params![id, classification],
+            )
+            .map_err(storage_err("update classification"))?;
+        if changed == 0 {
+            return Err(DomainError::NotFound(format!("repository {id}")));
+        }
+        Ok(())
     }
 
     fn delete(&self, id: &str) -> DomainResult<()> {
