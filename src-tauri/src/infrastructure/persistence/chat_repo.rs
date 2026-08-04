@@ -163,6 +163,11 @@ impl ChatRepository for SqliteChatRepository {
     fn append_message(&self, message: &Message) -> DomainResult<()> {
         let citations_json = serde_json::to_string(&message.citations)
             .map_err(|e| DomainError::Storage(format!("serialize citations: {e}")))?;
+        let grounding_json = match &message.grounding {
+            Some(g) => serde_json::to_string(g)
+                .map_err(|e| DomainError::Storage(format!("serialize grounding: {e}")))?,
+            None => String::new(),
+        };
         let role = match message.role {
             Role::User => "user",
             Role::Assistant => "assistant",
@@ -171,8 +176,9 @@ impl ChatRepository for SqliteChatRepository {
             .lock()
             .execute(
                 "INSERT INTO messages
-                 (id, session_id, role, content, citations_json, provider, model, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                 (id, session_id, role, content, citations_json, provider, model, created_at,
+                  grounding_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     message.id,
                     message.session_id,
@@ -182,6 +188,7 @@ impl ChatRepository for SqliteChatRepository {
                     message.provider,
                     message.model,
                     message.created_at,
+                    grounding_json,
                 ],
             )
             .map_err(storage_err("insert message"))?;
@@ -234,7 +241,8 @@ impl ChatRepository for SqliteChatRepository {
         let conn = self.db.lock();
         let mut stmt = conn
             .prepare(
-                "SELECT id, session_id, role, content, citations_json, provider, model, created_at
+                "SELECT id, session_id, role, content, citations_json, provider, model, created_at,
+                        grounding_json
                  FROM messages WHERE session_id = ?1 ORDER BY created_at, rowid",
             )
             .map_err(storage_err("prepare list messages"))?;
@@ -242,6 +250,7 @@ impl ChatRepository for SqliteChatRepository {
             .query_map(params![session_id], |row| {
                 let role_str: String = row.get(2)?;
                 let citations_json: String = row.get(4)?;
+                let grounding_json: String = row.get(8)?;
                 Ok((
                     Message {
                         id: row.get(0)?,
@@ -253,19 +262,23 @@ impl ChatRepository for SqliteChatRepository {
                         },
                         content: row.get(3)?,
                         citations: Vec::new(),
+                        grounding: None,
                         provider: row.get(5)?,
                         model: row.get(6)?,
                         created_at: row.get(7)?,
                     },
                     citations_json,
+                    grounding_json,
                 ))
             })
             .map_err(storage_err("list messages"))?;
         let mut messages = Vec::new();
         for row in rows {
-            let (mut message, citations_json) = row.map_err(storage_err("read message"))?;
+            let (mut message, citations_json, grounding_json) =
+                row.map_err(storage_err("read message"))?;
             message.citations = serde_json::from_str::<Vec<Citation>>(&citations_json)
                 .unwrap_or_default();
+            message.grounding = serde_json::from_str(&grounding_json).ok();
             messages.push(message);
         }
         Ok(messages)
