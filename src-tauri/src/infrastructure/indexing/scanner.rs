@@ -197,6 +197,7 @@ impl SourceScanner for FsSourceScanner {
                 "not a directory: {root_path}"
             )));
         }
+        let ignore = IgnoreList::load(root);
         let mut files = Vec::new();
         let walker = WalkDir::new(root).follow_links(false).into_iter();
         for entry in walker.filter_entry(|e| {
@@ -226,6 +227,9 @@ impl SourceScanner for FsSourceScanner {
                 .unwrap_or(path)
                 .to_string_lossy()
                 .replace('\\', "/");
+            if ignore.matches(&rel_path) {
+                continue;
+            }
             files.push(SourceFile {
                 rel_path,
                 language: language.to_string(),
@@ -238,6 +242,59 @@ impl SourceScanner for FsSourceScanner {
     }
 }
 
+/// User-controlled index exclusions: gitignore-style patterns read from a
+/// `.cbnbignore` file at the source root. One pattern per line, `#` comments.
+/// A pattern containing `/` is anchored at the root; a bare pattern matches
+/// any path segment. `*` matches within a segment, `**` across segments.
+struct IgnoreList {
+    patterns: Vec<regex::Regex>,
+}
+
+impl IgnoreList {
+    fn load(root: &Path) -> Self {
+        let patterns = std::fs::read_to_string(root.join(".cbnbignore"))
+            .unwrap_or_default()
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .filter_map(Self::compile)
+            .collect();
+        Self { patterns }
+    }
+
+    fn compile(pattern: &str) -> Option<regex::Regex> {
+        let anchored = pattern.contains('/');
+        let pattern = pattern.trim_matches('/');
+        let mut re = String::new();
+        let mut chars = pattern.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '*' => {
+                    if chars.peek() == Some(&'*') {
+                        chars.next();
+                        re.push_str(".*");
+                    } else {
+                        re.push_str("[^/]*");
+                    }
+                }
+                '?' => re.push_str("[^/]"),
+                other => re.push_str(&regex::escape(&other.to_string())),
+            }
+        }
+        // A match on a directory ignores everything beneath it.
+        let full = if anchored {
+            format!("^{re}(/.*)?$")
+        } else {
+            format!("(^|/){re}(/.*)?$")
+        };
+        regex::Regex::new(&full).ok()
+    }
+
+    fn matches(&self, rel_path: &str) -> bool {
+        self.patterns.iter().any(|p| p.is_match(rel_path))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +303,41 @@ mod tests {
         let path = dir.join(rel);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
+    }
+
+    #[test]
+    fn cbnbignore_excludes_matching_paths() {
+        let dir = std::env::temp_dir().join(format!("cbnb-ignore-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        write(
+            &dir,
+            ".cbnbignore",
+            "# generated artifacts\n*.snap\nfixtures\ndocs/internal\n",
+        );
+        write(&dir, "src/main.rs", "fn main() {}");
+        write(&dir, "src/__snapshots__/ui.snap", "snapshot body");
+        write(&dir, "fixtures/big.md", "# fixture");
+        write(&dir, "docs/internal/plan.md", "# private plan");
+        write(&dir, "docs/public.md", "# public doc");
+        let files = FsSourceScanner.scan(dir.to_str().unwrap()).unwrap();
+        let paths: Vec<&String> = files.iter().map(|f| &f.rel_path).collect();
+        assert!(paths.contains(&&"src/main.rs".to_string()));
+        assert!(paths.contains(&&"docs/public.md".to_string()));
+        assert!(!paths.iter().any(|p| p.ends_with(".snap")), "{paths:?}");
+        assert!(!paths.iter().any(|p| p.starts_with("fixtures/")), "{paths:?}");
+        assert!(!paths.iter().any(|p| p.starts_with("docs/internal/")), "{paths:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ignore_globs_match_like_gitignore() {
+        let compile = |p: &str| IgnoreList::compile(p).unwrap();
+        assert!(compile("*.log").is_match("a/b/x.log"));
+        assert!(!compile("*.log").is_match("a/xlog"));
+        assert!(compile("docs/internal").is_match("docs/internal/x.md"));
+        assert!(!compile("docs/internal").is_match("src/docs/internal.md"));
+        assert!(compile("**/generated").is_match("a/b/generated/x.ts"));
+        assert!(compile("temp?").is_match("src/temp1/file.rs"));
     }
 
     #[test]

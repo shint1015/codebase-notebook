@@ -922,3 +922,48 @@ async fn disabled_provider_is_rejected() {
         Err(DomainError::ProviderNotConfigured(_))
     ));
 }
+
+#[tokio::test]
+async fn retrieval_follows_references_one_hop() {
+    let h = setup().await;
+
+    // caller.rs uses format_report (twice, no definition); helper.rs defines it.
+    let hop_dir = h._tmp.path().join("hop");
+    std::fs::create_dir_all(&hop_dir).unwrap();
+    std::fs::write(
+        hop_dir.join("caller.rs"),
+        "pub fn quarterly_summary() -> String {\n    let head = format_report(\"q1\");\n    let tail = format_report(\"q2\");\n    format!(\"{head}{tail}\")\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        hop_dir.join("helper.rs"),
+        "pub fn format_report(label: &str) -> String {\n    format!(\"report for {label}\")\n}\n",
+    )
+    .unwrap();
+    h.repositories
+        .add_local(&h.workspace_id, hop_dir.to_str().unwrap())
+        .unwrap();
+    h.index.execute(&h.workspace_id).await.unwrap();
+
+    // The question targets the caller only; the helper definition must be
+    // pulled in by the one-hop reference expansion.
+    let prepared = h
+        .ask
+        .prepare(
+            &h.workspace_id,
+            "how does quarterly_summary build its output?",
+            ProviderKind::Ollama,
+            None,
+        )
+        .await
+        .unwrap();
+    let paths: Vec<&String> = prepared.sources.iter().map(|s| &s.rel_path).collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("caller.rs")),
+        "caller should be retrieved directly, got {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p.ends_with("helper.rs")),
+        "definition of format_report should be pulled in by the hop, got {paths:?}"
+    );
+}

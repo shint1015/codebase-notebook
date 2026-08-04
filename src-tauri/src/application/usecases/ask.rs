@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::application::usecases::search::SearchUseCase;
+use crate::application::usecases::search::{defines_symbol, query_identifiers, SearchUseCase};
 use crate::domain::entities::chat::{Citation, Grounding, Message, Role};
 use crate::domain::entities::chunk::SearchHit;
 use crate::domain::entities::provider::ProviderKind;
@@ -22,6 +22,10 @@ const RETRIEVE_LIMIT: usize = 8;
 const MENTION_CHUNK_LIMIT: usize = 6;
 /// Recent turns replayed to the model for conversational context.
 const HISTORY_TURNS: usize = 6;
+/// Referenced-but-undefined symbols followed per question (one hop).
+const HOP_SYMBOLS: usize = 3;
+/// Extra chunks the hop may add on top of the first retrieval pass.
+const HOP_CHUNK_LIMIT: usize = 4;
 
 /// What would be sent where — shown to the user before any external call.
 #[derive(Debug, Serialize)]
@@ -145,11 +149,55 @@ impl AskUseCase {
                 hits.push(hit);
             }
         }
+        self.follow_references(workspace_id, &mut hits).await;
         if provider.is_external() {
             let blocked = self.confidential_prefixes(workspace_id)?;
             hits.retain(|h| !blocked.iter().any(|p| h.rel_path.starts_with(p)));
         }
         Ok(hits)
+    }
+
+    /// Deterministic one-hop expansion (multi-hop retrieval): symbols that the
+    /// retrieved chunks call but do not define get their definitions pulled in
+    /// too, so "how does X work?" also shows the helpers X depends on.
+    /// Deterministic on purpose — the consent preview and the actual prompt
+    /// must always agree. Best-effort: hop failures never break retrieval.
+    async fn follow_references(&self, workspace_id: &str, hits: &mut Vec<SearchHit>) {
+        let mut counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        for hit in hits.iter().take(4) {
+            for ident in query_identifiers(&hit.chunk.content) {
+                *counts.entry(ident).or_default() += 1;
+            }
+        }
+        // Only follow symbols used repeatedly and not already defined here.
+        counts.retain(|ident, count| {
+            *count >= 2 && !hits.iter().any(|h| defines_symbol(&h.chunk.content, ident))
+        });
+        let mut ranked: Vec<(String, usize)> = counts.into_iter().collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+        let mut seen: std::collections::HashSet<String> =
+            hits.iter().map(|h| h.chunk.id.clone()).collect();
+        let mut added = 0;
+        for (ident, _) in ranked.into_iter().take(HOP_SYMBOLS) {
+            if added >= HOP_CHUNK_LIMIT {
+                break;
+            }
+            let Ok(results) = self.search.execute(workspace_id, &ident, 2).await else {
+                continue;
+            };
+            for hit in results {
+                if added >= HOP_CHUNK_LIMIT {
+                    break;
+                }
+                if defines_symbol(&hit.chunk.content, &ident) && seen.insert(hit.chunk.id.clone())
+                {
+                    hits.push(hit);
+                    added += 1;
+                }
+            }
+        }
     }
 
     /// Path prefixes ("<repo>/") of sources that must not reach an external
