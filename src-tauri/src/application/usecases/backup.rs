@@ -31,6 +31,12 @@ pub struct ExportedRepository {
     pub root_path: String,
     pub remote_url: Option<String>,
     pub source_kind: String,
+    #[serde(default = "default_classification")]
+    pub classification: String,
+}
+
+fn default_classification() -> String {
+    "internal".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,6 +88,7 @@ impl BackupUseCases {
                 root_path: r.root_path,
                 remote_url: r.remote_url,
                 source_kind: r.source_kind.as_str().to_string(),
+                classification: r.classification.as_str().to_string(),
             })
             .collect();
 
@@ -153,6 +160,9 @@ impl BackupUseCases {
                 root_path: repo.root_path,
                 remote_url: repo.remote_url,
                 source_kind: kind,
+                classification: crate::domain::entities::repository::Classification::parse(
+                    &repo.classification,
+                ),
                 created_at: chrono::Utc::now().to_rfc3339(),
             };
             self.repositories.create(&entry).ok();

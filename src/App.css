@@ -600,6 +600,16 @@ textarea:focus {
   flex-shrink: 0;
 }
 
+.classification-select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #d0d0d8);
+  background: var(--surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
 .index-row {
   display: flex;
   align-items: center;

@@ -9,6 +9,7 @@ export interface Workspace {
 }
 
 export type SourceKind = "local" | "git" | "github_issues";
+export type Classification = "public" | "internal" | "confidential" | "secret";
 
 export interface Repository {
   id: string;
@@ -17,6 +18,7 @@ export interface Repository {
   root_path: string;
   remote_url: string | null;
   source_kind: SourceKind;
+  classification: Classification;
   created_at: string;
 }
 

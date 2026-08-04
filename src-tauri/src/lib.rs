@@ -72,6 +72,7 @@ pub fn run() {
             commands::add_local_repository,
             commands::add_git_repository,
             commands::add_github_issues_repository,
+            commands::set_repository_classification,
             commands::delete_repository,
             commands::sync_repository,
             commands::rebuild_watchers,

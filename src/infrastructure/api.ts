@@ -35,6 +35,8 @@ export const api = {
     invoke<Repository>("add_git_repository", { workspaceId, url }),
   addGithubIssuesRepository: (workspaceId: string, spec: string) =>
     invoke<Repository>("add_github_issues_repository", { workspaceId, spec }),
+  setRepositoryClassification: (repositoryId: string, classification: string) =>
+    invoke<void>("set_repository_classification", { repositoryId, classification }),
   deleteRepository: (repositoryId: string) =>
     invoke<void>("delete_repository", { repositoryId }),
   syncRepository: (repositoryId: string) =>

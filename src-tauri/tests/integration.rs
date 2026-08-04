@@ -691,6 +691,58 @@ async fn workspace_export_import_round_trips() {
 }
 
 #[tokio::test]
+async fn confidential_sources_are_excluded_from_external_providers() {
+    let h = setup().await;
+
+    // Add a second, confidential source with a distinctive term.
+    let secret_dir = h._tmp.path().join("secret");
+    std::fs::create_dir_all(&secret_dir).unwrap();
+    std::fs::write(
+        secret_dir.join("keys.md"),
+        "# Secrets\n\nThe production nebula_master_key rotates weekly.",
+    )
+    .unwrap();
+    let secret_repo = h
+        .repositories
+        .add_local(&h.workspace_id, secret_dir.to_str().unwrap())
+        .unwrap();
+    h.repositories
+        .set_classification(&secret_repo.id, "confidential")
+        .unwrap();
+    h.index.execute(&h.workspace_id).await.unwrap();
+
+    // Enable an external provider (with consent already granted at workspace level).
+    let mut config = ProviderConfig::default_for(ProviderKind::Anthropic);
+    config.enabled = true;
+    config.allow_send_code = true;
+    h.providers.upsert(&config).unwrap();
+    h.workspaces.set_allow_external(&h.workspace_id, true).unwrap();
+
+    // Local provider: confidential chunk is retrievable.
+    let local = h
+        .ask
+        .prepare(&h.workspace_id, "nebula_master_key rotation", ProviderKind::Ollama, None)
+        .await
+        .unwrap();
+    assert!(
+        local.sources.iter().any(|s| s.rel_path.starts_with("secret/")),
+        "local provider should see the confidential source"
+    );
+
+    // External provider: the confidential source is physically excluded.
+    let external = h
+        .ask
+        .prepare(&h.workspace_id, "nebula_master_key rotation", ProviderKind::Anthropic, None)
+        .await
+        .unwrap();
+    assert!(
+        external.sources.iter().all(|s| !s.rel_path.starts_with("secret/")),
+        "confidential source must never appear in an external prompt, got {:?}",
+        external.sources.iter().map(|s| &s.rel_path).collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
 async fn at_mentions_pin_a_file_into_the_context() {
     let h = setup().await;
     h.index.execute(&h.workspace_id).await.unwrap();

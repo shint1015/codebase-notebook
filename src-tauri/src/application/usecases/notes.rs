@@ -62,6 +62,7 @@ impl NotesUseCases {
                 root_path: dir.to_string_lossy().to_string(),
                 remote_url: None,
                 source_kind: SourceKind::Local,
+                classification: crate::domain::entities::repository::Classification::Internal,
                 created_at: chrono::Utc::now().to_rfc3339(),
             };
             self.repositories.create(&repository)?;

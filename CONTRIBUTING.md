@@ -68,3 +68,19 @@ export TAURI_SIGNING_PRIVATE_KEY="$(cat /path/to/updater.key)"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 npm run tauri build
 ```
+
+## Demo GIF
+
+The README's demo GIF must be a **real screen recording** of the app — never a
+mock-up, since readers take it as what the product actually does.
+
+1. Run the app with a workspace that has sources indexed.
+2. Record ~30s with Cmd+Shift+5 (macOS): add a source → index → ask a question
+   → click a citation.
+3. Convert and optimise:
+
+   ```bash
+   ./scripts/make-demo-gif.sh ~/Desktop/recording.mov [start] [duration]
+   ```
+
+4. Uncomment the `media/demo.gif` block at the top of README.md.

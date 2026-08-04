@@ -92,6 +92,13 @@ impl RepositoryUseCases {
         self.repositories.list_by_workspace(workspace_id)
     }
 
+    pub fn set_classification(&self, repository_id: &str, classification: &str) -> DomainResult<()> {
+        // Reject unknown values so the column stays a known enum.
+        let parsed = crate::domain::entities::repository::Classification::parse(classification);
+        self.repositories
+            .set_classification(repository_id, parsed.as_str())
+    }
+
     /// Register an existing local folder or single file as a repository of
     /// the workspace.
     pub fn add_local(&self, workspace_id: &str, root_path: &str) -> DomainResult<Repository> {
@@ -300,6 +307,7 @@ impl RepositoryUseCases {
             root_path: root_path.to_string(),
             remote_url,
             source_kind,
+            classification: crate::domain::entities::repository::Classification::Internal,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.repositories.create(&repository)?;

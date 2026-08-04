@@ -112,12 +112,15 @@ impl AskUseCase {
 
     /// Retrieve sources for a question: chunks of every `@mentioned` file
     /// (explicit user intent, always included) followed by search results,
-    /// de-duplicated.
+    /// de-duplicated. When `provider` is external, chunks from sources
+    /// classified confidential/secret are physically excluded so they can
+    /// never appear in an external prompt.
     async fn collect_hits(
         &self,
         workspace_id: &str,
         question: &str,
         query: &str,
+        provider: ProviderKind,
     ) -> DomainResult<Vec<SearchHit>> {
         let mut hits: Vec<SearchHit> = Vec::new();
         for path in mentioned_paths(question) {
@@ -134,7 +137,23 @@ impl AskUseCase {
                 hits.push(hit);
             }
         }
+        if provider.is_external() {
+            let blocked = self.confidential_prefixes(workspace_id)?;
+            hits.retain(|h| !blocked.iter().any(|p| h.rel_path.starts_with(p)));
+        }
         Ok(hits)
+    }
+
+    /// Path prefixes ("<repo>/") of sources that must not reach an external
+    /// provider, plus bare single-file source names.
+    fn confidential_prefixes(&self, workspace_id: &str) -> DomainResult<Vec<String>> {
+        Ok(self
+            .repositories
+            .list_by_workspace(workspace_id)?
+            .into_iter()
+            .filter(|r| r.classification.is_external_forbidden())
+            .flat_map(|r| [format!("{}/", r.name), r.name])
+            .collect())
     }
 
     /// Rewrite a follow-up question into a standalone retrieval query using
@@ -188,7 +207,7 @@ impl AskUseCase {
         self.ensure_indexed(workspace_id)?;
         let config = self.resolve_config(provider)?;
         let query = self.retrieval_query(session_id, question).await;
-        let hits = self.collect_hits(workspace_id, question, &query).await?;
+        let hits = self.collect_hits(workspace_id, question, &query, provider).await?;
         let is_external = provider.is_external();
         Ok(AskPreparation {
             provider,
@@ -257,7 +276,7 @@ impl AskUseCase {
         }
 
         let query = self.retrieval_query(Some(session_id), question).await;
-        let hits = self.collect_hits(workspace_id, question, &query).await?;
+        let hits = self.collect_hits(workspace_id, question, &query, provider).await?;
 
         let history = self.recent_history(session_id)?;
 
@@ -531,6 +550,7 @@ mod tests {
             root_path: "/tmp/backend".into(),
             remote_url: Some("https://github.com/org/backend.git".into()),
             source_kind: crate::domain::entities::repository::SourceKind::Git,
+            classification: crate::domain::entities::repository::Classification::Internal,
             created_at: "2026-01-01T00:00:00Z".into(),
         }];
         let prompt = build_system_prompt("demo", "Always answer in Japanese.", &repositories, &hits);
