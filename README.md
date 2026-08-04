@@ -59,6 +59,12 @@ sent to the cloud unless you explicitly opt in.
 **[⬇ Download the latest release](https://github.com/shint1015/codebase-notebook/releases/latest)**
 for macOS (Apple Silicon / Intel), Windows, or Linux.
 
+On macOS you can also install with [Homebrew](https://brew.sh):
+
+```bash
+brew tap shint1015/tap && brew install --cask --no-quarantine codebase-notebook
+```
+
 The builds are **unsigned** (signing certificates cost money; this project is
 free), so your OS will warn you on first launch:
 
