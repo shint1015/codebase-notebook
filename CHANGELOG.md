@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.17.0] - 2026-08-04
 
+## [0.17.0] - 2026-08-04
+
 ### Added
 
 - Data classification per source: tag each source **Public**, **Internal**,
