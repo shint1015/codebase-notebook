@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `.cbnbignore`: drop a gitignore-style file at a source's root to exclude
+  paths from indexing (`*.snap`, `fixtures`, `docs/internal`, `**/generated`).
+  Takes effect on the next re-index.
 - Multi-hop retrieval: when retrieved code calls a function that is defined
   elsewhere, the definition is pulled into the context too (one hop,
   deterministic — the consent preview always matches what is actually sent).
