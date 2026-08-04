@@ -54,6 +54,7 @@ impl SearchUseCase {
 
         if vector_ids.is_empty() {
             let hits: Vec<SearchHit> = keyword_hits.into_iter().take(pool).collect();
+            let hits = promote_symbol_definitions(query, hits);
             return Ok(self.maybe_rerank(query, hits, limit).await);
         }
 
@@ -79,6 +80,7 @@ impl SearchUseCase {
         for (i, hit) in hits.iter_mut().enumerate() {
             hit.score = 1.0 / (i as f64 + 1.0);
         }
+        let hits = promote_symbol_definitions(query, hits);
         Ok(self.maybe_rerank(query, hits, limit).await)
     }
 
@@ -182,6 +184,55 @@ fn parse_rank_order(reply: &str, len: usize) -> Vec<usize> {
         .collect()
 }
 
+/// Identifier-looking tokens in the query (function/class names). Requires a
+/// connector character or camelCase so plain English words don't qualify.
+fn query_identifiers(query: &str) -> Vec<String> {
+    query
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|token| {
+            token.len() >= 3
+                && token.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && (token.contains('_')
+                    // camelCase / PascalCase interior capital
+                    || token
+                        .chars()
+                        .skip(1)
+                        .any(|c| c.is_ascii_uppercase()))
+        })
+        .map(|t| t.to_string())
+        .collect()
+}
+
+/// True when `content` appears to *define* `ident` — a definition keyword
+/// directly before the name — rather than merely reference it.
+fn defines_symbol(content: &str, ident: &str) -> bool {
+    let pattern = format!(
+        r"(?m)\b(?:fn|def|class|function|func|struct|enum|trait|interface|impl|type|const)\s+{}\b",
+        regex::escape(ident)
+    );
+    regex::Regex::new(&pattern)
+        .map(|re| re.is_match(content))
+        .unwrap_or(false)
+}
+
+/// When the query names a symbol, its definition chunks move to the front of
+/// the ranking (stable within each group). Usages still follow, so context is
+/// not lost — the definition just wins the tie.
+fn promote_symbol_definitions(query: &str, hits: Vec<SearchHit>) -> Vec<SearchHit> {
+    let idents = query_identifiers(query);
+    if idents.is_empty() {
+        return hits;
+    }
+    let (mut definitions, usages): (Vec<SearchHit>, Vec<SearchHit>) = hits
+        .into_iter()
+        .partition(|h| idents.iter().any(|i| defines_symbol(&h.chunk.content, i)));
+    for hit in &mut definitions {
+        hit.score += 1.0;
+    }
+    definitions.extend(usages);
+    definitions
+}
+
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
     if a.len() != b.len() || a.is_empty() {
         return 0.0;
@@ -201,6 +252,61 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::cosine_similarity;
+    use super::{defines_symbol, promote_symbol_definitions, query_identifiers};
+    use crate::domain::entities::chunk::{Chunk, SearchHit};
+
+    fn hit(id: &str, content: &str) -> SearchHit {
+        SearchHit {
+            chunk: Chunk {
+                id: id.to_string(),
+                document_id: "d".into(),
+                workspace_id: "w".into(),
+                seq: 0,
+                content: content.to_string(),
+                start_line: 1,
+                end_line: 1,
+            },
+            rel_path: format!("src/{id}.rs"),
+            score: 0.5,
+        }
+    }
+
+    #[test]
+    fn identifiers_require_symbol_shape() {
+        assert_eq!(
+            query_identifiers("where is collect_hits called from?"),
+            vec!["collect_hits".to_string()]
+        );
+        assert_eq!(
+            query_identifiers("explain MessageBubble rendering"),
+            vec!["MessageBubble".to_string()]
+        );
+        assert!(query_identifiers("how does the indexing work").is_empty());
+    }
+
+    #[test]
+    fn definition_beats_usage() {
+        assert!(defines_symbol("pub fn collect_hits(&self) {}", "collect_hits"));
+        assert!(defines_symbol("export function MessageBubble() {}", "MessageBubble"));
+        assert!(defines_symbol("class DataLoader:\n  pass", "DataLoader"));
+        assert!(!defines_symbol("let x = self.collect_hits(id);", "collect_hits"));
+        assert!(!defines_symbol("// collect_hits is documented here", "collect_hits"));
+    }
+
+    #[test]
+    fn symbol_query_promotes_definition_chunk() {
+        let hits = vec![
+            hit("usage", "let out = self.collect_hits(ws, q).await?;"),
+            hit("def", "async fn collect_hits(&self, ws: &str) -> Vec<Hit> {"),
+        ];
+        let ranked = promote_symbol_definitions("collect_hits", hits);
+        assert_eq!(ranked[0].chunk.id, "def");
+        assert!(ranked[0].score > ranked[1].score);
+        // Non-symbol queries leave the order untouched.
+        let hits = vec![hit("a", "alpha"), hit("b", "beta")];
+        let ranked = promote_symbol_definitions("what changed recently", hits);
+        assert_eq!(ranked[0].chunk.id, "a");
+    }
 
     #[test]
     fn cosine_of_identical_vectors_is_one() {
