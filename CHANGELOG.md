@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Symbol search: queries that name a function or class (`collect_hits`,
+  `MessageBubble`) now rank the chunk that *defines* the symbol above chunks
+  that merely use it, across Rust, Python, TypeScript/JavaScript and Go
+  definition keywords. Applies to both the search panel and answer retrieval.
+
 ## [0.18.0] - 2026-08-04
 
 ## [0.18.0] - 2026-08-04
