@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-04
+
+### Added
+
+- Grounding badge on every answer: each assistant message now shows whether
+  its claims carry citations — **Grounded**, **Partially grounded** or
+  **No citations** — computed deterministically from the answer text
+  (paragraphs and bullets outside code blocks). Markers that point at no
+  retrieved source are flagged as a hallucination signal.
+- Verify button: re-checks an answer against the full content of its cited
+  chunks using the local model and lists any unsupported claims. Verification
+  never uses an external provider, so it is free and nothing leaves your
+  machine.
+
 ## [0.17.0] - 2026-08-04
 
 ## [0.17.0] - 2026-08-04
