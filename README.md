@@ -166,6 +166,11 @@ While the app is running it exposes a small, token-protected API on
   connector tokens live in the OS keychain.
 - **Everything is stored locally** — your index, chats, and documents stay in
   the app's data directory on your machine.
+- **You choose what gets indexed.** Put a `.cbnbignore` file at a source's
+  root (gitignore-style patterns, e.g. `*.snap`, `fixtures`, `docs/internal`)
+  to keep paths out of the index entirely. Per source, you can also set a
+  sensitivity: **Confidential**/**Secret** sources are never sent to cloud
+  models — only the local model can read them.
 
 ---
 
