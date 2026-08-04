@@ -186,7 +186,7 @@ fn parse_rank_order(reply: &str, len: usize) -> Vec<usize> {
 
 /// Identifier-looking tokens in the query (function/class names). Requires a
 /// connector character or camelCase so plain English words don't qualify.
-fn query_identifiers(query: &str) -> Vec<String> {
+pub(crate) fn query_identifiers(query: &str) -> Vec<String> {
     query
         .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .filter(|token| {
@@ -205,7 +205,7 @@ fn query_identifiers(query: &str) -> Vec<String> {
 
 /// True when `content` appears to *define* `ident` — a definition keyword
 /// directly before the name — rather than merely reference it.
-fn defines_symbol(content: &str, ident: &str) -> bool {
+pub(crate) fn defines_symbol(content: &str, ident: &str) -> bool {
     let pattern = format!(
         r"(?m)\b(?:fn|def|class|function|func|struct|enum|trait|interface|impl|type|const)\s+{}\b",
         regex::escape(ident)
