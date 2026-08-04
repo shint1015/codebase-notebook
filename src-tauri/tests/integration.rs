@@ -197,6 +197,7 @@ async fn setup() -> Harness {
             Arc::new(RegexSecretScanner::new()),
             Arc::new(SmartChunker),
             embedder,
+            Arc::new(GitCliCloner),
         ),
         ask: AskUseCase::new(
             workspace_repo,

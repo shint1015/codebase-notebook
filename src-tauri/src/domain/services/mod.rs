@@ -196,6 +196,14 @@ pub trait GitSync: Send + Sync {
     fn commit_and_push(&self, repo_path: &str, message: &str) -> DomainResult<()>;
 }
 
+/// Read-only view of a source's git history, used to make recent changes
+/// searchable and citable. Best-effort: any failure reads as "no history".
+pub trait GitHistory: Send + Sync {
+    /// Recent commits of `repo_path` as `(HEAD hash, markdown log)`.
+    /// None when the path is not a git repository (or git is unavailable).
+    fn recent_history(&self, repo_path: &str, limit: usize) -> Option<(String, String)>;
+}
+
 /// Resolves the concrete LLM adapter for a provider kind (model router).
 pub trait ProviderRouter: Send + Sync {
     fn resolve(&self, kind: ProviderKind) -> DomainResult<std::sync::Arc<dyn LlmProvider>>;
