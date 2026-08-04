@@ -8,10 +8,16 @@ use crate::domain::error::DomainResult;
 use crate::domain::repositories::{
     DocumentRepository, RepositoryRepository, WorkspaceRepository,
 };
-use crate::domain::services::{Chunker, EmbeddingProvider, SecretScanner, SourceScanner};
+use crate::domain::services::{
+    Chunker, EmbeddingProvider, GitHistory, SecretScanner, SourceFile, SourceScanner,
+};
 
 /// Embedding batch size kept small so local embedders stay responsive.
 const EMBED_BATCH: usize = 16;
+/// Commits included in the synthetic git-history document per source.
+const GIT_LOG_COMMITS: usize = 50;
+/// Virtual path (within a repository) of the synthetic git-history document.
+const GIT_HISTORY_FILE: &str = "GIT_HISTORY.md";
 
 #[derive(Debug, Default, Serialize)]
 pub struct IndexReport {
@@ -31,6 +37,7 @@ pub struct IndexWorkspaceUseCase {
     secret_scanner: Arc<dyn SecretScanner>,
     chunker: Arc<dyn Chunker>,
     embedder: Arc<dyn EmbeddingProvider>,
+    git_history: Arc<dyn GitHistory>,
 }
 
 impl IndexWorkspaceUseCase {
@@ -42,6 +49,7 @@ impl IndexWorkspaceUseCase {
         secret_scanner: Arc<dyn SecretScanner>,
         chunker: Arc<dyn Chunker>,
         embedder: Arc<dyn EmbeddingProvider>,
+        git_history: Arc<dyn GitHistory>,
     ) -> Self {
         Self {
             workspaces,
@@ -51,6 +59,7 @@ impl IndexWorkspaceUseCase {
             secret_scanner,
             chunker,
             embedder,
+            git_history,
         }
     }
 
@@ -68,7 +77,22 @@ impl IndexWorkspaceUseCase {
         };
 
         for repository in &repositories {
-            let files = self.scanner.scan(&repository.root_path)?;
+            let mut files = self.scanner.scan(&repository.root_path)?;
+            // Recent commit history becomes a citable markdown document, so
+            // "what changed recently?" is answerable from sources.
+            if let Some((head, markdown)) = self
+                .git_history
+                .recent_history(&repository.root_path, GIT_LOG_COMMITS)
+            {
+                files.push(SourceFile {
+                    rel_path: GIT_HISTORY_FILE.to_string(),
+                    language: "markdown".to_string(),
+                    content: markdown,
+                    // HEAD hash as content hash: unchanged history is skipped
+                    // by the incremental check like any other file.
+                    content_hash: head,
+                });
+            }
             self.index_files(workspace_id, &repository.id, &repository.name, files, &mut report)
                 .await?;
         }

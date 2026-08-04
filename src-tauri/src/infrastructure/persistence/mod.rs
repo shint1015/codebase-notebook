@@ -229,6 +229,11 @@ const MIGRATIONS: &[&str] = &[
     r#"
             ALTER TABLE repositories ADD COLUMN classification TEXT NOT NULL DEFAULT 'internal';
             "#,
+    // v8: grounding assessment (JSON) for assistant messages. Empty string =
+    // not assessed (pre-v0.18 messages and user messages).
+    r#"
+            ALTER TABLE messages ADD COLUMN grounding_json TEXT NOT NULL DEFAULT '';
+            "#,
 ];
 
 pub(crate) fn storage_err<E: std::fmt::Display>(context: &str) -> impl Fn(E) -> DomainError + '_ {

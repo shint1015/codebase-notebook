@@ -182,6 +182,7 @@ impl AppState {
                 secret_scanner,
                 Arc::new(SmartChunker),
                 embedder,
+                Arc::new(GitCliCloner),
             ),
             ask: AskUseCase::new(
                 workspace_repo.clone(),

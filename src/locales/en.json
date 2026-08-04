@@ -193,5 +193,17 @@
     "confidential": "Confidential (local only)",
     "secret": "Secret (local only)",
     "hint": "Confidential and Secret sources are never sent to external providers — only the local model can use them."
+  },
+  "grounding": {
+    "grounded": "Grounded",
+    "partial": "Partially grounded",
+    "ungrounded": "No citations",
+    "claims": "{{cited}}/{{total}} claims cited",
+    "invalidMarkers": "Invalid citation markers: {{markers}}",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "verifySupported": "Verified by {{model}}: claims are supported by the cited sources.",
+    "verifyUnsupported": "Verified by {{model}}: some claims are NOT supported:",
+    "verifyHint": "Re-checks this answer against its cited sources with the local model. Nothing leaves your machine."
   }
 }

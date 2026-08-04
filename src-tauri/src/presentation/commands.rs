@@ -704,6 +704,17 @@ pub fn set_search_settings(
     Ok(())
 }
 
+/// Local-model second opinion on an assistant answer's grounding. Never calls
+/// an external provider.
+#[tauri::command]
+pub async fn verify_answer(
+    state: State<'_, AppState>,
+    session_id: String,
+    message_id: String,
+) -> CommandResult<crate::application::usecases::ask::VerificationReport> {
+    Ok(state.ask.verify_answer(&session_id, &message_id).await?)
+}
+
 #[tauri::command]
 pub async fn ask(
     state: State<'_, AppState>,

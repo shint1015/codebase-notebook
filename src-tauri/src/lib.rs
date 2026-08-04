@@ -97,6 +97,7 @@ pub fn run() {
             commands::reveal_source,
             commands::prepare_ask,
             commands::ask,
+            commands::verify_answer,
             commands::agent_ask,
             commands::list_connectors,
             commands::set_connector_token,

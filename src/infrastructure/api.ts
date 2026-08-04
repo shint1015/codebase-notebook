@@ -114,6 +114,12 @@ export const api = {
       sessionId,
     }),
 
+  verifyAnswer: (sessionId: string, messageId: string) =>
+    invoke<import("../domain/types").VerificationReport>("verify_answer", {
+      sessionId,
+      messageId,
+    }),
+
   listUsage: (limit?: number) =>
     invoke<import("../domain/types").UsageRecord[]>("list_usage", { limit }),
   usageSummary: () =>
