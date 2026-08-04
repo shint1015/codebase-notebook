@@ -14,7 +14,7 @@ import { sql } from "@codemirror/lang-sql";
 import { yaml } from "@codemirror/lang-yaml";
 
 /** Pick a CodeMirror language extension from a file name. */
-function languageFor(fileName: string) {
+export function languageFor(fileName: string) {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
     case "md":

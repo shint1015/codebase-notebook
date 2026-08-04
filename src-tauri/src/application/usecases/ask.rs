@@ -524,7 +524,11 @@ fn build_system_prompt(
          you rely on one.\n\
          3. If the sources do not contain the answer, say clearly that the indexed sources \
          do not cover it — do not guess.\n\
-         4. Answer in the same language as the user's question.\n\n",
+         4. Answer in the same language as the user's question.\n\
+         5. When you propose a change to an existing file, open the code fence with the \
+         language followed by path=<the source path as cited>, e.g. ```rust path=repo/src/main.rs, \
+         and include enough unchanged surrounding lines that the block replaces a contiguous \
+         region of the file.\n\n",
     );
     // Overview lets the model answer meta questions ("what repositories are
     // in this workspace?") that chunk retrieval alone cannot ground.
