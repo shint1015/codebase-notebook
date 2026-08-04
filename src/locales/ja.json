@@ -192,5 +192,17 @@
     "confidential": "機密（ローカルのみ）",
     "secret": "極秘（ローカルのみ）",
     "hint": "「機密」「極秘」のソースは外部プロバイダに送信されません。ローカルモデルのみが利用できます。"
+  },
+  "grounding": {
+    "grounded": "根拠あり",
+    "partial": "一部根拠あり",
+    "ungrounded": "引用なし",
+    "claims": "{{total}}件中{{cited}}件の記述に引用あり",
+    "invalidMarkers": "無効な引用番号: {{markers}}",
+    "verify": "検証",
+    "verifying": "検証中…",
+    "verifySupported": "{{model}}による検証: 記述は引用ソースに裏付けられています。",
+    "verifyUnsupported": "{{model}}による検証: 裏付けのない記述があります:",
+    "verifyHint": "ローカルモデルで回答を引用ソースと照合します。データは外部に送信されません。"
   }
 }

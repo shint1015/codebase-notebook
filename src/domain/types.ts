@@ -132,12 +132,35 @@ export interface Citation {
   snippet: string;
 }
 
+export interface Grounding {
+  total_claims: number;
+  cited_claims: number;
+  invalid_markers: number[];
+}
+
+export type GroundingVerdict = "grounded" | "partial" | "ungrounded";
+
+export function groundingVerdict(g: Grounding): GroundingVerdict {
+  if (g.total_claims === 0) return "grounded";
+  if (g.cited_claims === 0) return "ungrounded";
+  return g.cited_claims === g.total_claims && g.invalid_markers.length === 0
+    ? "grounded"
+    : "partial";
+}
+
+export interface VerificationReport {
+  supported: boolean;
+  issues: string[];
+  model: string;
+}
+
 export interface Message {
   id: string;
   session_id: string;
   role: "user" | "assistant";
   content: string;
   citations: Citation[];
+  grounding?: Grounding | null;
   provider: string | null;
   model: string | null;
   created_at: string;

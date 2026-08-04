@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "../../domain/types";
+import type { Message, VerificationReport } from "../../domain/types";
+import { groundingVerdict } from "../../domain/types";
 import { api } from "../../infrastructure/api";
 
 export function MessageBubble({
@@ -21,7 +22,23 @@ export function MessageBubble({
   const [openCitation, setOpenCitation] = useState<number | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<VerificationReport | null>(
+    null,
+  );
   const { t } = useTranslation();
+
+  const verify = async () => {
+    setVerifying(true);
+    setVerification(null);
+    try {
+      setVerification(await api.verifyAnswer(message.session_id, message.id));
+    } catch (e) {
+      setRevealError(String(e));
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const copy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -52,6 +69,52 @@ export function MessageBubble({
             <span className="model-tag">
               {message.provider} · {message.model}
             </span>
+          )}
+          {message.grounding && (
+            <span
+              className={`grounding-badge ${groundingVerdict(message.grounding)}`}
+              title={[
+                t("grounding.claims", {
+                  cited: message.grounding.cited_claims,
+                  total: message.grounding.total_claims,
+                }),
+                message.grounding.invalid_markers.length > 0
+                  ? t("grounding.invalidMarkers", {
+                      markers: message.grounding.invalid_markers.join(", "),
+                    })
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              {t(`grounding.${groundingVerdict(message.grounding)}`)}
+            </span>
+          )}
+          {message.citations.length > 0 && (
+            <button
+              className="verify-button"
+              title={t("grounding.verifyHint")}
+              disabled={verifying}
+              onClick={() => void verify()}
+            >
+              {verifying ? t("grounding.verifying") : t("grounding.verify")}
+            </button>
+          )}
+          {verification && (
+            <div
+              className={`verification-result ${verification.supported ? "ok" : "warn"}`}
+            >
+              {verification.supported
+                ? t("grounding.verifySupported", { model: verification.model })
+                : t("grounding.verifyUnsupported", { model: verification.model })}
+              {verification.issues.length > 0 && (
+                <ul>
+                  {verification.issues.map((issue, i) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
           {message.citations.length > 0 && (
             <div className="citations">

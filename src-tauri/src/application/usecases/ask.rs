@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::application::usecases::search::SearchUseCase;
-use crate::domain::entities::chat::{Citation, Message, Role};
+use crate::domain::entities::chat::{Citation, Grounding, Message, Role};
 use crate::domain::entities::chunk::SearchHit;
 use crate::domain::entities::provider::ProviderKind;
 use crate::domain::error::{DomainError, DomainResult};
@@ -40,6 +40,14 @@ pub struct SourcePreview {
     pub rel_path: String,
     pub start_line: i64,
     pub end_line: i64,
+}
+
+/// Result of the local-model verification pass over an assistant answer.
+#[derive(Debug, Serialize)]
+pub struct VerificationReport {
+    pub supported: bool,
+    pub issues: Vec<String>,
+    pub model: String,
 }
 
 pub struct AskUseCase {
@@ -286,6 +294,7 @@ impl AskUseCase {
             role: Role::User,
             content: question.to_string(),
             citations: Vec::new(),
+            grounding: None,
             provider: None,
             model: None,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -302,6 +311,7 @@ impl AskUseCase {
             .chat_stream(&config.default_model, &system, &turns, on_token)
             .await?;
         let citations = extract_citations(&answer, &hits);
+        let grounding = Some(assess_grounding(&answer, &hits));
 
         // Usage accounting + audit trail (which sources were in the prompt).
         let prompt_chars =
@@ -331,12 +341,78 @@ impl AskUseCase {
             role: Role::Assistant,
             content: answer,
             citations,
+            grounding,
             provider: Some(provider.as_str().to_string()),
             model: Some(config.default_model),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.chats.append_message(&assistant_message)?;
         Ok(assistant_message)
+    }
+
+    /// Second-opinion hallucination check: re-read the cited chunks and ask
+    /// the LOCAL model whether the answer's claims are actually supported by
+    /// them. Never uses an external provider — verification is free and the
+    /// answer text stays on-machine.
+    pub async fn verify_answer(
+        &self,
+        session_id: &str,
+        message_id: &str,
+    ) -> DomainResult<VerificationReport> {
+        let messages = self.chats.list_messages(session_id)?;
+        let message = messages
+            .iter()
+            .find(|m| m.id == message_id)
+            .ok_or_else(|| DomainError::NotFound(format!("message {message_id}")))?;
+        if message.role != Role::Assistant {
+            return Err(DomainError::Validation(
+                "only assistant answers can be verified".into(),
+            ));
+        }
+        if message.citations.is_empty() {
+            return Ok(VerificationReport {
+                supported: false,
+                issues: vec!["the answer cites no sources — nothing to check it against".into()],
+                model: String::new(),
+            });
+        }
+
+        let config = self.resolve_config(ProviderKind::Ollama)?;
+        let mut sources = String::new();
+        for citation in &message.citations {
+            // Full chunk content when still indexed; stored snippet otherwise.
+            let content = self
+                .documents
+                .get_chunk(&citation.chunk_id)
+                .map(|c| c.content)
+                .unwrap_or_else(|_| citation.snippet.clone());
+            sources.push_str(&format!(
+                "[{}] {} (lines {}-{})\n{}\n\n",
+                citation.marker, citation.rel_path, citation.start_line, citation.end_line, content
+            ));
+        }
+
+        let system = "You are a strict verification assistant. You are given numbered \
+                      sources and an answer that cites them. Check every factual claim in \
+                      the answer against the sources. Respond with ONLY a JSON object: \
+                      {\"supported\": true|false, \"issues\": [\"...\"]}. \
+                      `supported` is true only when every claim is backed by the sources. \
+                      Each issue is one short sentence naming an unsupported or \
+                      contradicted claim. No prose outside the JSON.";
+        let prompt = format!(
+            "Sources:\n{sources}Answer to verify:\n{}",
+            message.content
+        );
+        let llm = self.router.resolve(ProviderKind::Ollama)?;
+        let raw = llm
+            .chat(&config.default_model, system, &[ChatTurn::user(prompt)])
+            .await?;
+        let parsed = parse_verification(&raw);
+        Ok(VerificationReport {
+            supported: parsed.0,
+            issues: parsed.1,
+            model: config.default_model,
+        })
     }
 
     fn resolve_config(
@@ -490,6 +566,136 @@ fn extract_citations(answer: &str, hits: &[SearchHit]) -> Vec<Citation> {
         .collect()
 }
 
+/// Deterministic grounding check: split the answer into prose claim units
+/// (paragraphs and list items outside fenced code blocks) and count how many
+/// carry a valid citation marker. Also collects markers that point at no
+/// retrieved source — a strong hallucination signal.
+fn assess_grounding(answer: &str, hits: &[SearchHit]) -> Grounding {
+    /// Markers referenced in one claim unit: (valid, invalid).
+    fn markers(text: &str, max: usize) -> (bool, Vec<i64>) {
+        let mut valid = false;
+        let mut invalid = Vec::new();
+        let bytes = text.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'[' {
+                if let Some(close) = text[i + 1..].find(']') {
+                    let inner = &text[i + 1..i + 1 + close];
+                    if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+                        if let Ok(n) = inner.parse::<usize>() {
+                            if n >= 1 && n <= max {
+                                valid = true;
+                            } else if !invalid.contains(&(n as i64)) {
+                                invalid.push(n as i64);
+                            }
+                        }
+                    }
+                    i += close + 2;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        (valid, invalid)
+    }
+
+    let mut total = 0i64;
+    let mut cited = 0i64;
+    let mut invalid_markers: Vec<i64> = Vec::new();
+    let mut in_code = false;
+    // A paragraph accumulates consecutive prose lines; list items count alone.
+    let mut current = String::new();
+    let mut flush = |unit: &mut String, total: &mut i64, cited: &mut i64, invalid: &mut Vec<i64>| {
+        let text = unit.trim();
+        // Ignore trivial fragments (greetings, headings, one-word lines).
+        if text.chars().count() >= 30 {
+            let (has_valid, mut bad) = markers(text, hits.len());
+            *total += 1;
+            if has_valid {
+                *cited += 1;
+            }
+            for m in bad.drain(..) {
+                if !invalid.contains(&m) {
+                    invalid.push(m);
+                }
+            }
+        }
+        unit.clear();
+    };
+    for line in answer.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code = !in_code;
+            flush(&mut current, &mut total, &mut cited, &mut invalid_markers);
+            continue;
+        }
+        if in_code {
+            continue;
+        }
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            flush(&mut current, &mut total, &mut cited, &mut invalid_markers);
+            continue;
+        }
+        let is_list_item = trimmed.starts_with("- ")
+            || trimmed.starts_with("* ")
+            || trimmed
+                .split_once('.')
+                .is_some_and(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+        if is_list_item {
+            flush(&mut current, &mut total, &mut cited, &mut invalid_markers);
+            current.push_str(trimmed);
+            flush(&mut current, &mut total, &mut cited, &mut invalid_markers);
+        } else {
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(trimmed);
+        }
+    }
+    flush(&mut current, &mut total, &mut cited, &mut invalid_markers);
+    Grounding {
+        total_claims: total,
+        cited_claims: cited,
+        invalid_markers,
+    }
+}
+
+/// Parse the verifier's JSON leniently: local models sometimes wrap it in
+/// code fences or prepend prose. Unparseable output counts as NOT supported —
+/// a guard must fail closed.
+fn parse_verification(raw: &str) -> (bool, Vec<String>) {
+    let start = raw.find('{');
+    let end = raw.rfind('}');
+    let json = match (start, end) {
+        (Some(s), Some(e)) if e > s => &raw[s..=e],
+        _ => {
+            return (
+                false,
+                vec!["verifier returned no parseable result".to_string()],
+            )
+        }
+    };
+    match serde_json::from_str::<serde_json::Value>(json) {
+        Ok(value) => {
+            let supported = value["supported"].as_bool().unwrap_or(false);
+            let issues = value["issues"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|i| i.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (supported, issues)
+        }
+        Err(_) => (
+            false,
+            vec!["verifier returned no parseable result".to_string()],
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,6 +744,61 @@ mod tests {
     fn ignores_non_numeric_brackets() {
         let hits = vec![hit("a", "src/a.rs")];
         assert!(extract_citations("array[i] and [foo] are not citations", &hits).is_empty());
+    }
+
+    #[test]
+    fn grounding_counts_cited_and_uncited_claims() {
+        let hits = vec![hit("a", "src/a.rs"), hit("b", "src/b.rs")];
+        let answer = "The parser lives in module a and is called from main [1].\n\n\
+                      It also caches results between runs for faster startup times.\n\n\
+                      ```rust\nfn main() {}\n```\n\
+                      - the cache is cleared on schema change [2]\n\
+                      - eviction happens after ten minutes of idle time";
+        let g = assess_grounding(answer, &hits);
+        assert_eq!(g.total_claims, 4);
+        assert_eq!(g.cited_claims, 2);
+        assert!(g.invalid_markers.is_empty());
+        assert_eq!(g.verdict(), "partial");
+    }
+
+    #[test]
+    fn grounding_flags_invalid_markers_and_full_citation() {
+        let hits = vec![hit("a", "src/a.rs")];
+        let good = assess_grounding(
+            "Everything about the parser is defined in the grammar module [1].",
+            &hits,
+        );
+        assert_eq!(good.verdict(), "grounded");
+        let bad = assess_grounding(
+            "The scheduler retries failed jobs three times before giving up [7].",
+            &hits,
+        );
+        assert_eq!(bad.invalid_markers, vec![7]);
+        assert_eq!(bad.verdict(), "ungrounded");
+    }
+
+    #[test]
+    fn grounding_ignores_code_and_headings() {
+        let hits = vec![hit("a", "src/a.rs")];
+        let g = assess_grounding("# Title\n\n```\nsome code that is long enough to count\n```\n", &hits);
+        assert_eq!(g.total_claims, 0);
+        assert_eq!(g.verdict(), "grounded");
+    }
+
+    #[test]
+    fn verification_parses_json_and_fails_closed() {
+        let (ok, issues) = parse_verification(
+            "```json\n{\"supported\": true, \"issues\": []}\n```",
+        );
+        assert!(ok);
+        assert!(issues.is_empty());
+        let (ok, issues) = parse_verification("I think it looks fine!");
+        assert!(!ok);
+        assert_eq!(issues.len(), 1);
+        let (ok, issues) =
+            parse_verification("{\"supported\": false, \"issues\": [\"claim X is not in sources\"]}");
+        assert!(!ok);
+        assert_eq!(issues, vec!["claim X is not in sources".to_string()]);
     }
 
     #[test]

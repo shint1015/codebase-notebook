@@ -1055,6 +1055,62 @@ textarea:focus {
   align-self: flex-end;
 }
 
+.grounding-badge {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  align-self: flex-end;
+  cursor: default;
+}
+
+.grounding-badge.grounded {
+  background: rgba(46, 160, 67, 0.15);
+  color: #2ea043;
+}
+
+.grounding-badge.partial {
+  background: rgba(210, 153, 34, 0.15);
+  color: #d29922;
+}
+
+.grounding-badge.ungrounded {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+.verify-button {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid var(--border, #d0d0d8);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.verify-button:hover {
+  color: inherit;
+}
+
+.verification-result {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 3px solid #2ea043;
+  background: rgba(46, 160, 67, 0.08);
+}
+
+.verification-result.warn {
+  border-left-color: #d29922;
+  background: rgba(210, 153, 34, 0.08);
+}
+
+.verification-result ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
 .citations {
   display: flex;
   flex-wrap: wrap;
