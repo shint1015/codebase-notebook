@@ -95,6 +95,15 @@ export function useRepositories(workspaceId: string | null) {
     [workspaceId, refresh, wrap],
   );
 
+  const setClassification = useCallback(
+    (repositoryId: string, classification: string) =>
+      wrap(async () => {
+        await api.setRepositoryClassification(repositoryId, classification);
+        await refresh();
+      }),
+    [refresh, wrap],
+  );
+
   const remove = useCallback(
     (repositoryId: string) =>
       wrap(async () => {
@@ -145,6 +154,7 @@ export function useRepositories(workspaceId: string | null) {
     addGit,
     addGithubIssues,
     remove,
+    setClassification,
     sync,
     index,
     cloning,

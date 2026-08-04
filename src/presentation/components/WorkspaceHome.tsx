@@ -164,6 +164,22 @@ export function WorkspaceHome({
                 </div>
               </div>
               <div className="repo-actions">
+                <select
+                  className="classification-select"
+                  title={t("classification.hint")}
+                  value={repo.classification}
+                  disabled={repos.cloning || repos.indexing}
+                  onChange={(e) =>
+                    void repos.setClassification(repo.id, e.target.value)
+                  }
+                >
+                  <option value="public">{t("classification.public")}</option>
+                  <option value="internal">{t("classification.internal")}</option>
+                  <option value="confidential">
+                    {t("classification.confidential")}
+                  </option>
+                  <option value="secret">{t("classification.secret")}</option>
+                </select>
                 {repo.source_kind !== "local" && (
                   <button
                     title={t("home.syncTitle")}
