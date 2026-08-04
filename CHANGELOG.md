@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.18.0] - 2026-08-04
 
+## [0.18.0] - 2026-08-04
+
 ### Added
 
 - Git history awareness: when a source is a git repository, its recent
