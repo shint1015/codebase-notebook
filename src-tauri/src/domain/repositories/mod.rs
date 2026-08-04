@@ -19,6 +19,7 @@ pub trait RepositoryRepository: Send + Sync {
     fn create(&self, repository: &Repository) -> DomainResult<()>;
     fn find_by_id(&self, id: &str) -> DomainResult<Repository>;
     fn list_by_workspace(&self, workspace_id: &str) -> DomainResult<Vec<Repository>>;
+    fn set_classification(&self, id: &str, classification: &str) -> DomainResult<()>;
     fn delete(&self, id: &str) -> DomainResult<()>;
 }
 

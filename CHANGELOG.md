@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-04
+
+### Added
+
+- Data classification per source: tag each source **Public**, **Internal**,
+  **Confidential (local only)** or **Secret (local only)** from the workspace
+  home. New sources default to Internal (previous behaviour — external send
+  allowed with consent).
+- External-send policy enforcement: chunks from Confidential and Secret sources
+  are physically excluded from prompts sent to external providers, at retrieval
+  time — before the consent preview is built — so confidential code never even
+  appears in what would be sent off-machine. The local model still sees every
+  source regardless of classification.
+
 ## [0.16.0] - 2026-07-17
 
 ### Added
