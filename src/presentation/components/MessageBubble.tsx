@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import type { Message, VerificationReport } from "../../domain/types";
 import { groundingVerdict } from "../../domain/types";
 import { api } from "../../infrastructure/api";
+import { pathFromFenceMeta } from "../../application/patch";
+import { ApplyPatchDialog } from "./ApplyPatchDialog";
 
 export function MessageBubble({
   message,
@@ -26,6 +28,11 @@ export function MessageBubble({
   const [verification, setVerification] = useState<VerificationReport | null>(
     null,
   );
+  const [applyTarget, setApplyTarget] = useState<{
+    snippet: string;
+    path: string | null;
+  } | null>(null);
+  const [appliedPath, setAppliedPath] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const verify = async () => {
@@ -58,7 +65,48 @@ export function MessageBubble({
       </div>
       {message.role === "assistant" ? (
         <div className="message-content markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              // Multi-line code blocks get an "Apply to file…" affordance
+              // that opens a diff preview against a workspace source.
+              pre: ({ node, children, ...props }) => {
+                const code = node?.children?.[0];
+                const meta =
+                  code && code.type === "element"
+                    ? ((code.data as { meta?: string } | undefined)?.meta ??
+                      undefined)
+                    : undefined;
+                const text =
+                  code && code.type === "element"
+                    ? code.children
+                        .map((c) => (c.type === "text" ? c.value : ""))
+                        .join("")
+                    : "";
+                return (
+                  <div className="code-block-wrap">
+                    <pre {...props}>{children}</pre>
+                    {text.includes("\n") && (
+                      <button
+                        className="apply-code"
+                        title={t("apply.buttonTitle")}
+                        onClick={() =>
+                          setApplyTarget({
+                            snippet: text,
+                            path: pathFromFenceMeta(meta),
+                          })
+                        }
+                      >
+                        {t("apply.button")}
+                      </button>
+                    )}
+                  </div>
+                );
+              },
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
         </div>
       ) : (
         <div className="message-content">{message.content}</div>
@@ -167,7 +215,31 @@ export function MessageBubble({
                 </pre>
               ))}
           {revealError && <div className="error">{revealError}</div>}
+          {appliedPath && (
+            <div className="apply-applied">
+              {t("apply.applied", { path: appliedPath })}
+              <button
+                className="citation-open"
+                onClick={() => onOpenSource(appliedPath, 1)}
+              >
+                {t("citation.open")}
+              </button>
+            </div>
+          )}
         </div>
+      )}
+      {applyTarget && (
+        <ApplyPatchDialog
+          workspaceId={workspaceId}
+          snippet={applyTarget.snippet}
+          suggestedPath={applyTarget.path}
+          citations={message.citations}
+          onClose={() => setApplyTarget(null)}
+          onApplied={(relPath) => {
+            setApplyTarget(null);
+            setAppliedPath(relPath);
+          }}
+        />
       )}
     </div>
   );

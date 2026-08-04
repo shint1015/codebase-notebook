@@ -205,5 +205,18 @@
     "verifySupported": "Verified by {{model}}: claims are supported by the cited sources.",
     "verifyUnsupported": "Verified by {{model}}: some claims are NOT supported:",
     "verifyHint": "Re-checks this answer against its cited sources with the local model. Nothing leaves your machine."
+  },
+  "apply": {
+    "button": "Apply",
+    "buttonTitle": "Apply this code block to a source file (with diff preview)",
+    "title": "Apply code to file",
+    "targetFile": "Target file",
+    "targetPlaceholder": "repo/src/path/to/file",
+    "alreadyApplied": "The file already contains this code — nothing to apply.",
+    "manualMerge": "Could not merge automatically. Edit the file below by hand, or paste over the relevant region.",
+    "apply": "Apply",
+    "applying": "Applying…",
+    "cancel": "Cancel",
+    "applied": "Applied to {{path}}."
   }
 }
