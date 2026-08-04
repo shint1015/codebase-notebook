@@ -109,6 +109,17 @@ pub async fn add_github_issues_repository(
 }
 
 #[tauri::command]
+pub fn set_repository_classification(
+    state: State<'_, AppState>,
+    repository_id: String,
+    classification: String,
+) -> CommandResult<()> {
+    Ok(state
+        .repositories
+        .set_classification(&repository_id, &classification)?)
+}
+
+#[tauri::command]
 pub fn delete_repository(
     state: State<'_, AppState>,
     repository_id: String,
