@@ -204,5 +204,18 @@
     "verifySupported": "{{model}}による検証: 記述は引用ソースに裏付けられています。",
     "verifyUnsupported": "{{model}}による検証: 裏付けのない記述があります:",
     "verifyHint": "ローカルモデルで回答を引用ソースと照合します。データは外部に送信されません。"
+  },
+  "apply": {
+    "button": "適用",
+    "buttonTitle": "このコードブロックをソースファイルへ適用（diffプレビュー付き）",
+    "title": "コードをファイルへ適用",
+    "targetFile": "適用先ファイル",
+    "targetPlaceholder": "repo/src/path/to/file",
+    "alreadyApplied": "このコードは既にファイルに含まれています — 適用は不要です。",
+    "manualMerge": "自動マージできませんでした。下のエディタで直接編集してください。",
+    "apply": "適用",
+    "applying": "適用中…",
+    "cancel": "キャンセル",
+    "applied": "{{path}} に適用しました。"
   }
 }

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-04
+
+### Added
+
+- Diff-based edits: assistant code blocks in chat now have an Apply button
+  that merges the proposed change into a workspace source file and shows a
+  unified diff for review before writing. The target file is inferred from
+  the code fence's `path=` annotation or the message's citations, and the
+  merge falls back to the cited line range or manual editing when the
+  snippet cannot be anchored unambiguously.
+
 ## [0.19.0] - 2026-08-04
 
 ## [0.19.0] - 2026-08-04

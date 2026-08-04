@@ -600,6 +600,69 @@ textarea:focus {
   flex-shrink: 0;
 }
 
+/* ---------- apply code block to file ---------- */
+
+.code-block-wrap {
+  position: relative;
+}
+
+.apply-code {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.code-block-wrap:hover .apply-code {
+  opacity: 1;
+}
+
+.apply-patch-modal {
+  width: min(860px, 92vw);
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh;
+}
+
+.apply-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.apply-target input {
+  flex: 1;
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+}
+
+.apply-diff {
+  flex: 1;
+  min-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--border, #d0d0d8);
+  border-radius: 8px;
+}
+
+.apply-notice {
+  font-size: 13px;
+  color: var(--muted, #777);
+  margin-bottom: 6px;
+}
+
+.apply-applied {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted, #4a7);
+  margin-top: 6px;
+}
+
 .classification-select {
   font-size: 12px;
   padding: 3px 6px;
